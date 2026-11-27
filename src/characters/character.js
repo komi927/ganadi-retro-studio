@@ -3,6 +3,8 @@ import { S, RAD, clamp } from '../math.js';
 import { HEAD_LOCAL_CY, HEAD_PIVOT_Y, HEAD_RY, FLOOR_POSES } from './design.js';
 import { getFaceMaterial } from './faces.js';
 
+const BIPED_POSES = new Set(['sit', 'bow', 'perch', 'cheek']);
+
 export class StudioCharacter {
   constructor(character, assets, worldScene, charScene, isPlayer = false, initialStyle = 'lowpoly') {
     this.character = character;
@@ -337,7 +339,7 @@ export class StudioCharacter {
   getTriangleCount() {
     const pose = this.renderPose;
     const body = pose === 'mochi' ? this.mochiMesh
-      : (FLOOR_POSES.has(pose) || (this.quadMode && pose !== 'perch' && pose !== 'cheek') ? this.quadGroup : this.bipedGroup);
+      : (FLOOR_POSES.has(pose) || (this.quadMode && !BIPED_POSES.has(pose)) ? this.quadGroup : this.bipedGroup);
     let tris = 0;
     const countTree = (obj) => {
       if (obj === this.tailPivot && pose === 'mochi') return;
@@ -390,10 +392,6 @@ export class StudioCharacter {
 
   updateAnimation(dt, speed, sprinting, isStudioMode, perched = false) {
     const paired = this.cheekLean !== null;
-    const qTarget = this.quadMode && !perched && !paired ? 1 : 0;
-    this.quadBlend += (qTarget - this.quadBlend) * (perched ? 1 : Math.min(1, dt * 11));
-    if (Math.abs(qTarget - this.quadBlend) < .002) this.quadBlend = qTarget;
-    const qb = this.quadBlend;
     this.sprinting = sprinting;
 
     const moving = speed > 0.25;
@@ -409,11 +407,19 @@ export class StudioCharacter {
     else if (paired) pose = 'cheek';
     else if (moving) pose = sprinting ? 'run' : 'walk';
     else if (!this.onGround) pose = 'jump';
+    const finishedBow = pose === 'bow' && this.emoteAge >= .86;
+    if (finishedBow) pose = 'idle';
+    const useBipedPose = BIPED_POSES.has(pose);
+    const qTarget = Number(this.quadMode && !useBipedPose);
+    const blend = useBipedPose && !paired ? 1 : Math.min(1, dt * 11);
+    this.quadBlend += (qTarget - this.quadBlend) * blend;
+    if (Math.abs(qTarget - this.quadBlend) < .002) this.quadBlend = qTarget;
+    const qb = this.quadBlend;
     const floorPose = FLOOR_POSES.has(pose);
     const mochi = pose === 'mochi';
     const changedForm = floorPose !== this.floorPose || mochi !== (this.renderPose === 'mochi')
       || (floorPose && this.isGonyani && pose !== this.renderPose)
-      || perched !== (this.renderPose === 'perch') || paired !== (this.renderPose === 'cheek');
+      || useBipedPose !== BIPED_POSES.has(this.renderPose);
     this.renderPose = pose;
     this.floorPose = floorPose;
     this.emoteAge += dt;
@@ -445,6 +451,7 @@ export class StudioCharacter {
     let headPitch = 0, headRoll = 0, headYaw = 0;
     let armLP = 0, armRP = 0, armLZ = -0.18, armRZ = 0.18;
     let footLP = 0, footRP = 0;
+    let footSpread = 0, footLift = 0, footForward = 0;
     let earLFlap = 0, earRFlap = 0, earBack = 0;
     let tailWag = s * 0.26, tailPitch = 0;
 
@@ -452,6 +459,7 @@ export class StudioCharacter {
       bodyY = Math.sin(t) * 0.45 * S;
       earLFlap = Math.sin(t) * 0.05;
       earRFlap = Math.sin(t) * 0.05;
+      if (finishedBow) this.setFace('normal');
     } else if (pose === 'stare') {
       headYaw = .14;
       tailWag = Math.sin(t * .7) * .08;
@@ -581,20 +589,28 @@ export class StudioCharacter {
       armLP = -0.75; armLZ = -0.58;
       armRP = -0.15; armRZ = 0.18;
     } else if (pose === 'sit' || pose === 'perch') {
-      bodyY = (perched ? -3.4 : -1.6) * S;
+      bodyY = perched ? -.17 : -.096;
+      bodyPitch = perched ? 0 : -.085;
+      headPitch = perched ? 0 : .075;
       headRoll = -0.05;
-      armLP = armRP = perched ? -.74 : -.35;
-      armLZ = perched ? .14 : -.25;
+      armLP = armRP = perched ? -.74 : -.42;
+      armLZ = perched ? .14 : -.12;
       armRZ = -armLZ;
-      footLP = -1.32; footRP = -1.32;
+      footLP = footRP = perched ? -1.32 : -1.08;
+      if (!perched) {
+        footSpread = .053;
+        footForward = .19;
+        footLift = .016;
+      }
       tailWag = Math.sin(t * 1.6) * 0.34;
     } else if (pose === 'bow') {
       const dip = Math.sin(Math.PI * clamp(this.emoteAge / .86, 0, 1));
-      bodyY = -.06 * dip;
-      headPitch = .36 * dip;
-      armLZ = -1.05 * dip; armRZ = 1.05 * dip;
-      earLFlap = .2 * dip; earRFlap = .2 * dip;
-      if (this.emoteAge > .86) this.setFace('normal');
+      bodyY = -.018 * dip;
+      bodyPitch = .10 * dip;
+      headPitch = .31 * dip;
+      armLP = armRP = -.32 * dip;
+      footLift = .033 * dip;
+      earLFlap = earRFlap = .13 * dip;
     } else if (mochi) {
       headRoll = -.11 + Math.sin(t * .78) * .04;
       tailWag = 0;
@@ -618,6 +634,9 @@ export class StudioCharacter {
     // Apply Bipedal limbs
     this.armLPivot.rotation.set(armLP, 0, armLZ);
     this.armRPivot.rotation.set(armRP, 0, armRZ);
+    const footX = (this.isGonyani ? 1.8 : 2.14) * S + footSpread;
+    this.footLPivot.position.set(-footX, 4.4 * S + footLift, 1.8 * S + footForward);
+    this.footRPivot.position.set(footX, 4.4 * S + footLift, 1.8 * S + footForward);
     this.footLPivot.rotation.set(footLP, 0, 0);
     this.footRPivot.rotation.set(footRP, 0, 0);
 
@@ -627,14 +646,16 @@ export class StudioCharacter {
     this.qLegs[1].rotation.x = -qStride;
     this.qLegs[2].rotation.x = -qStride;
     this.qLegs[3].rotation.x =  qStride;
-    this.qLegs.forEach((leg) => {
+    this.qLegs.forEach((leg, index) => {
       leg.visible = true;
       leg.position.y = 6.2 * S;
+      leg.position.z = (index < 2 ? 5.6 : -7.2) * S;
       leg.rotation.z = 0;
     });
     this.quadGroup.rotation.z = 0;
     this.quadGroup.position.y = 0;
     this.quadTorso.position.y = 10.6 * S;
+    this.quadTorso.rotation.x = 0;
     this.quadTorso.scale.setScalar(1);
 
     // Smoothly position Head, Tail, and Wings between Biped & Quadruped modes
@@ -644,7 +665,6 @@ export class StudioCharacter {
       THREE.MathUtils.lerp(0.0, 9.2, qb) * S
     );
     this.headPivot.rotation.set(headPitch, headYaw, headRoll);
-    this.headPivot.scale.set(1, 1, 1);
 
     this.tailPivot.position.set(
       0.3 * S,
@@ -657,8 +677,7 @@ export class StudioCharacter {
     if (floorPose) {
       this.applyFloorPose(pose, t);
     } else if (mochi) {
-      this.headPivot.position.set(-.035, .765, .061);
-      this.headPivot.scale.set(.83, .77, .92);
+      this.headPivot.position.set(-.035, .727, .043);
     }
 
     this.angelWingsGroup.position.set(
@@ -704,13 +723,18 @@ export class StudioCharacter {
   applyFloorPose(pose, time) {
     const sideways = pose === 'roll' || (pose === 'sleep' && !this.isGonyani);
     const tucked = pose === 'loaf' || (pose === 'sleep' && this.isGonyani);
-    const stretch = pose === 'stretch';
     const breathe = Math.sin(time * .65) * .022;
+    if (pose === 'stretch') {
+      this.applyStretchPose(breathe);
+      return;
+    }
+    const rolling = pose === 'roll';
+    const loaf = pose === 'loaf';
 
-    this.quadGroup.position.y = sideways ? .20 : -.17;
-    this.quadGroup.rotation.z = sideways ? .96 : 0;
+    this.quadGroup.position.y = rolling ? .349 : sideways ? .20 : -.17;
+    this.quadGroup.rotation.z = rolling ? 1.41 : sideways ? .96 : 0;
     this.quadTorso.position.y = sideways ? .365 : .43;
-    this.quadTorso.scale.set(tucked ? 1.13 : 1.05, .72 + breathe, stretch ? 1.46 : 1.19);
+    this.quadTorso.scale.set(loaf ? 1.17 : tucked ? 1.13 : 1.05, (loaf ? .83 : .72) + breathe, 1.19);
     this.qLegs.forEach((leg, index) => {
       leg.visible = !tucked;
       leg.rotation.x = index < 2 ? (sideways ? -1.0 : -1.5) : (sideways ? .55 : 1.16);
@@ -720,11 +744,32 @@ export class StudioCharacter {
     });
 
     const headRoll = this.headPivot.rotation.z;
-    this.headPivot.position.set(sideways ? .05 : 0, (sideways ? .455 : .137) + breathe, stretch ? .82 : .56);
-    this.headPivot.rotation.set(.07 + breathe, sideways ? .30 : .41, (sideways ? .99 : (tucked ? -.09 : .12)) + headRoll);
-    this.tailPivot.position.set(sideways ? -.32 : .08, .24 + breathe, stretch ? -.75 : -.61);
+    const headY = rolling ? .503 : sideways ? .455 : loaf ? .238 : .137;
+    this.headPivot.position.set(sideways ? .05 : 0, headY + breathe, loaf ? .50 : .56);
+    const floorRoll = rolling ? 1.12 : sideways ? .99 : tucked ? -.09 : .12;
+    this.headPivot.rotation.set(.07 + breathe, sideways ? .30 : loaf ? .16 : .41, floorRoll + headRoll);
+    this.tailPivot.position.set(sideways ? -.32 : .08, .24 + breathe, -.61);
     this.tailPivot.rotation.x -= sideways ? .30 : .18;
     if (tucked) this.tailPivot.rotation.y = 1.07 + breathe;
+  }
+
+  applyStretchPose(breathe) {
+    // 胸を前足に預け、後ろ足で腰を支える。
+    this.quadGroup.position.y = -.075;
+    this.quadTorso.position.y = .55;
+    this.quadTorso.rotation.x = .25;
+    this.quadTorso.scale.set(1.04, .86 + breathe, 1.42);
+    this.qLegs.forEach((leg, index) => {
+      const front = index < 2;
+      leg.position.y = front ? .183 : .43;
+      leg.position.z = front ? .61 : -.49;
+      leg.rotation.x = front ? -1.47 : .19;
+      leg.rotation.z = (index % 2 ? 1 : -1) * (front ? .18 : .14);
+    });
+    this.headPivot.position.set(0, .185 + breathe, .76);
+    this.headPivot.rotation.set(.12, .12, -.04);
+    this.tailPivot.position.set(.06, .47 + breathe, -.66);
+    this.tailPivot.rotation.x -= .16;
   }
 
   getHeadTopWorldPos(target) {
