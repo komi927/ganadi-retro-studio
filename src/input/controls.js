@@ -1,4 +1,4 @@
-import { MAX_CAMERA_DISTANCE, clamp } from '../math.js';
+import { MAX_CAMERA_DISTANCE, clamp } from '../math.js?v=2';
 
 export function bindControls(canvas, appState, actions) {
   const joyZoneEl = document.getElementById('joyZone');

@@ -1,19 +1,19 @@
 import { THREE } from './three.js';
-import { MAX_CAMERA_DISTANCE, RAD, WORLD_HALF, clamp } from './math.js';
+import { MAX_CAMERA_DISTANCE, RAD, WORLD_HALF, clamp } from './math.js?v=2';
 import { playSfx, toggleAudio } from './audio.js';
 import { CHARACTERS, FLOOR_POSES } from './characters/design.js';
 import { buildSharedAssets, buildGonyaniAssets } from './characters/assets.js';
-import { StudioCharacter } from './characters/character.js';
+import { StudioCharacter } from './characters/character.js?v=2';
 import { globalRenderUniforms } from './graphics/materials.js';
 import { createRenderPipeline } from './graphics/renderer.js';
-import { createWorld } from './world/scene.js';
-import { BENCH_REACH, createBenchClimb } from './world/bench-climb.js';
+import { createWorld } from './world/scene.js?v=2';
+import { BENCH_REACH, createBenchClimb } from './world/bench-climb.js?v=2';
 import { createWorldInteractions, movePlayer, updateCrowd } from './world/physics.js';
 import { createTransparentPng } from './export/png.js';
 import { buildCharacterGlb } from './export/glb.js';
 import { downloadFile } from './export/download.js';
-import { bindControls } from './input/controls.js';
-import { createMenus, isCompactViewport } from './ui/menus.js';
+import { bindControls } from './input/controls.js?v=2';
+import { createMenus, isCompactViewport } from './ui/menus.js?v=2';
 
 function initApp() {
   const viewportWrap = document.getElementById('viewportWrap');
@@ -72,7 +72,8 @@ function initApp() {
   const speechBubbleEl = document.getElementById('speechBubble');
   const plazaBubbleEl = document.getElementById('plazaBubble');
   const companionButton = document.getElementById('btnCompanion');
-  const plazaActionButton = document.getElementById('btnPlazaAction');
+  // 旧版の HTML がキャッシュに残っている間も起動できるようにする。
+  const plazaActionButton = document.getElementById('btnPlazaAction') || document.getElementById('btnSnackAction');
   const formsButton = document.getElementById('btnForms');
   const formMenuEl = document.getElementById('formMenu');
   const menus = createMenus(viewportWrap, {
