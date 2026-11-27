@@ -118,6 +118,17 @@
       left: calc(10px + var(--sal));
       right: calc(10px + var(--sar));
     }
+    #topHudBar button {
+      white-space: nowrap;
+    }
+    @media (max-width: 359px) {
+      #topHudBar button {
+        padding-inline: 6px;
+      }
+      #topCountTag, .settings-camera-suffix {
+        display: none;
+      }
+    }
     #characterPicker {
       top: calc(58px + var(--sat));
       left: calc(10px + var(--sal));
@@ -516,8 +527,8 @@
         <button id="btnSound" title="効果音 ON/OFF" class="hidden sm:flex glass-panel pixel-btn rounded-xl w-9 h-9 items-center justify-center text-base">
           🔊
         </button>
-        <button id="btnOpenSettings" title="設定・カメラメニュー" class="glass-panel pixel-btn rounded-xl px-2.5 sm:px-3 h-9 flex items-center justify-center text-xs font-extrabold gap-1">
-          <span>⚙️</span><span>設定・カメラ</span>
+        <button id="btnOpenSettings" title="設定・カメラメニュー" aria-label="設定・カメラ" aria-controls="settingsDrawer" aria-expanded="true" class="glass-panel pixel-btn rounded-xl px-2.5 sm:px-3 h-9 flex items-center justify-center text-xs font-extrabold gap-1">
+          <span aria-hidden="true">⚙️</span><span>設定<span class="settings-camera-suffix">・カメラ</span></span>
         </button>
       </div>
     </header>
@@ -2202,6 +2213,7 @@
           this.onGround = true;
           this.quadMode = false;
           this.quadBlend = 0;
+          this.sprinting = false;
           this.activeEmote = 'normal';
           this.animPhase = Math.random() * 10;
 
@@ -2236,9 +2248,11 @@
         }
 
         getTriangleCount() {
+          const body = this.quadMode ? this.quadGroup : this.bipedGroup;
+          const otherBody = this.quadMode ? this.bipedGroup : this.quadGroup;
           let tris = 0;
           const countTree = (obj) => {
-            if (!obj.visible) return;
+            if (obj === otherBody || (!obj.visible && obj !== body)) return;
             if (obj.isMesh && !obj.userData.isWireframe && obj.geometry) {
               const g = obj.geometry;
               tris += g.index ? (g.index.count / 3) : (g.attributes.position.count / 3);
@@ -2280,13 +2294,16 @@
         dispose(worldScene, charScene) {
           charScene.remove(this.root);
           worldScene.remove(this.shadowMesh);
+          this.shadowMesh.geometry.dispose();
           this.shadowMat.dispose();
         }
 
         updateAnimation(dt, speed, sprinting, isStudioMode) {
           const qTarget = this.quadMode ? 1 : 0;
           this.quadBlend += (qTarget - this.quadBlend) * Math.min(1, dt * 11);
+          if (Math.abs(qTarget - this.quadBlend) < .002) this.quadBlend = qTarget;
           const qb = this.quadBlend;
+          this.sprinting = sprinting;
 
           // Smoothly cross-fade between Bipedal and Quadruped body groups
           this.bipedGroup.visible = qb < 0.96;
@@ -2662,6 +2679,11 @@
           const treeTrunkGeo = ensureFlatNormalAttribute(new THREE.CylinderGeometry(0.22, 0.30, 1.3, 6), true);
           const treeCanopy1 = ensureFlatNormalAttribute(new THREE.IcosahedronGeometry(0.84, 0), true);
           const treeCanopy2 = ensureFlatNormalAttribute(new THREE.IcosahedronGeometry(0.56, 0), true);
+          // キャラ描画にも木の奥行きを渡す。PS1風の頂点スナップは背景の木と揃える。
+          const treeOccluders = new THREE.Group();
+          const treeDepthMat = createCelMaterial('#000000', '#000000', '#000000');
+          treeDepthMat.colorWrite = false;
+          charScene.add(treeOccluders);
           const treeCoords = [
             [-8.4, -8.2, 1.12],
             [ 8.2, -7.8, 1.04],
@@ -2687,6 +2709,14 @@
             tg.position.set(tx, 0, tz);
             tg.scale.setScalar(ts);
             worldMeadowGroup.add(tg);
+            const occluder = tg.clone(false);
+            for (const part of [tr, c1, c2]) {
+              const depthMesh = part.clone(false);
+              depthMesh.material = treeDepthMat;
+              depthMesh.renderOrder = -1;
+              occluder.add(depthMesh);
+            }
+            treeOccluders.add(occluder);
             trees.push({ x: tx, z: tz, r: 0.72 * ts });
           });
 
@@ -2973,7 +3003,6 @@
             compositeMat.uniforms.uTexelSize.value.set(1 / targetW, 1 / targetH);
           }
 
-          window.addEventListener('resize', rebuildRenderTargets);
           if (window.ResizeObserver) {
             new ResizeObserver(rebuildRenderTargets).observe(viewportWrap);
           }
@@ -2997,7 +3026,7 @@
             distance: window.innerWidth < 640 ? 11.2 : 10.0,
             autoRotate: false,
             outlineOn: false,
-            showVirtualPad: isTouchDevice || isCompactViewport(),
+            showVirtualPad: null, // null uses the automatic device/layout setting
             dashLock: false,
             bubbleTimer: 0,
             keys: Object.create(null),
@@ -3013,6 +3042,7 @@
 
           const speechBubbleEl = document.getElementById('speechBubble');
           const settingsDrawerEl = document.getElementById('settingsDrawer');
+          const settingsButtonEl = document.getElementById('btnOpenSettings');
           const drawerBackdropEl = document.getElementById('drawerBackdrop');
           const virtualPadEl = document.getElementById('virtualPad');
           const mobileEmoteBarEl = document.getElementById('mobileEmoteBar');
@@ -3053,9 +3083,11 @@
           }
 
           function syncVirtualPadVisibility() {
-            const shouldShow = (appState.mode === 'world') && appState.showVirtualPad;
+            const padEnabled = appState.showVirtualPad ?? (isTouchDevice || isCompactViewport());
+            const shouldShow = appState.mode === 'world' && padEnabled;
             virtualPadEl.classList.toggle('hidden', !shouldShow);
-            chkVirtualPadEl.checked = appState.showVirtualPad;
+            chkVirtualPadEl.checked = padEnabled;
+            if (!shouldShow) resetJoystick();
             // In studio mode (or when pad is hidden), drop mobile emote bar down cleanly
             mobileEmoteBarEl.classList.toggle('studio-bottom', !shouldShow);
           }
@@ -3106,24 +3138,40 @@
             }
           }
 
+          function syncDrawerAccess() {
+            const compact = isCompactViewport();
+            const mobileOpen = compact && settingsDrawerEl.classList.contains('open');
+            const open = compact ? mobileOpen : !settingsDrawerEl.classList.contains('desktop-hidden');
+            if (!compact) settingsDrawerEl.classList.remove('open');
+            drawerBackdropEl.classList.toggle('open', mobileOpen);
+            viewportWrap.inert = mobileOpen;
+            settingsDrawerEl.inert = !open;
+            settingsButtonEl.setAttribute('aria-expanded', String(open));
+          }
+
           function openDrawer() {
-            if (isCompactViewport()) {
+            const compact = isCompactViewport();
+            if (compact) {
+              releaseHeldControls();
               settingsDrawerEl.classList.add('open');
-              drawerBackdropEl.classList.add('open');
             } else {
               settingsDrawerEl.classList.toggle('desktop-hidden');
-              setTimeout(rebuildRenderTargets, 25);
             }
+            syncDrawerAccess();
+            if (compact) document.getElementById('btnCloseDrawer').focus({ preventScroll: true });
+            rebuildRenderTargets();
           }
 
           function closeDrawer() {
+            const restoreFocus = settingsDrawerEl.contains(document.activeElement);
             if (isCompactViewport()) {
               settingsDrawerEl.classList.remove('open');
-              drawerBackdropEl.classList.remove('open');
             } else {
               settingsDrawerEl.classList.add('desktop-hidden');
-              setTimeout(rebuildRenderTargets, 25);
             }
+            syncDrawerAccess();
+            if (restoreFocus) settingsButtonEl.focus({ preventScroll: true });
+            rebuildRenderTargets();
           }
 
           function triggerEmote(emoteId) {
@@ -3270,9 +3318,13 @@
 
           function switchMode(mode) {
             appState.mode = mode;
+            appState.targetYawDeg = null;
+            appState.targetPitchDeg = null;
+            releaseHeldControls();
             const isWorld = mode === 'world';
             worldMeadowGroup.visible = isWorld;
             worldPropsGroup.visible = isWorld;
+            treeOccluders.visible = isWorld;
             studioPedestalGroup.visible = !isWorld;
             crowd.forEach((npc) => npc.setVisible(isWorld));
 
@@ -3287,8 +3339,6 @@
               appState.distance = isPortrait ? 7.6 : 6.2;
               appState.pitchDeg = 12;
               appState.yawDeg = 28;
-              // Reset joystick cleanly
-              appState.joy.x = 0; appState.joy.y = 0; appState.joy.mag = 0; appState.joy.autoDash = false;
             } else {
               skyUniforms.uTop.value.set('#9cd7ff');
               skyUniforms.uBottom.value.set('#e8f7ff');
@@ -3314,7 +3364,7 @@
           // Top HUD & Drawer Wiring
           document.getElementById('btnModeWorld').addEventListener('click', () => switchMode('world'));
           document.getElementById('btnModeStudio').addEventListener('click', () => switchMode('studio'));
-          document.getElementById('btnOpenSettings').addEventListener('click', openDrawer);
+          settingsButtonEl.addEventListener('click', openDrawer);
           document.getElementById('btnCloseDrawer').addEventListener('click', closeDrawer);
           drawerBackdropEl.addEventListener('click', closeDrawer);
 
@@ -3359,6 +3409,7 @@
             player.pos.set(0, 0, appState.mode === 'world' ? 0.6 : 0);
             player.vel.set(0, 0, 0);
             player.yaw = 0;
+            player.onGround = true;
             ballState.pos.set(2.8, ballState.radius, 2.0);
             ballState.vel.set(0, 0, 0);
             syncCameraSliders(true);
@@ -3412,26 +3463,33 @@
             });
           });
 
+          function finishPlayerWalkTransition() {
+            const target = Number(player.quadMode);
+            if (player.quadBlend === target) return;
+            player.quadBlend = target;
+            player.updateAnimation(0, Math.hypot(player.vel.x, player.vel.z), player.sprinting, appState.mode === 'studio');
+          }
+
           // 現在の解像度で透過PNGを保存
           document.getElementById('btnExportPng').addEventListener('click', () => {
-            const prevPropsVis = worldPropsGroup.visible;
-            const prevCrowdVis = crowd.map((c) => c.root.visible);
-            if (appState.mode === 'world') {
-              worldPropsGroup.visible = false;
-              crowd.forEach((c) => { c.root.visible = false; });
-            }
-
-            renderer.setRenderTarget(charRT);
-            renderer.setClearColor(0x000000, 0);
-            renderer.clear();
-            renderer.render(charScene, camera);
-
+            finishPlayerWalkTransition();
+            const hidden = [worldPropsGroup, treeOccluders, ...crowd.map((c) => c.root)].filter((obj) => obj.visible);
+            const previousTarget = renderer.getRenderTarget();
             const raw = new Uint8Array(targetW * targetH * 4);
-            renderer.readRenderTargetPixels(charRT, 0, 0, targetW, targetH, raw);
-
-            worldPropsGroup.visible = prevPropsVis;
-            crowd.forEach((c, idx) => { c.root.visible = prevCrowdVis[idx]; });
-            renderPipeline();
+            try {
+              hidden.forEach((obj) => { obj.visible = false; });
+              renderer.setRenderTarget(charRT);
+              renderer.setClearColor(0x000000, 0);
+              renderer.clear();
+              renderer.render(charScene, camera);
+              renderer.readRenderTargetPixels(charRT, 0, 0, targetW, targetH, raw);
+            } catch (error) {
+              showToast('⚠️ 透過PNGを保存できませんでした');
+              return;
+            } finally {
+              hidden.forEach((obj) => { obj.visible = true; });
+              renderer.setRenderTarget(previousTarget);
+            }
 
             const out = new Uint8ClampedArray(targetW * targetH * 4);
             let minX = targetW, minY = targetH, maxX = -1, maxY = -1;
@@ -3504,6 +3562,7 @@
            * valid glTF 2.0 binary (.glb) file ready for Blockbench, Blender, Unity, or Godot!
            */
           function exportCharacterGLB() {
+            finishPlayerWalkTransition();
             const modelName = player.isGonyani ? 'Gonyani' : 'Ganadi';
             player.root.updateMatrixWorld(true);
             const invRoot = new THREE.Matrix4().copy(player.root.matrixWorld).invert();
@@ -3801,7 +3860,9 @@
           }
 
           function resetJoystick() {
+            const id = appState.joy.pointerId;
             appState.joy.pointerId = null;
+            if (id !== null && joyZoneEl.hasPointerCapture(id)) joyZoneEl.releasePointerCapture(id);
             appState.joy.x = 0;
             appState.joy.y = 0;
             appState.joy.mag = 0;
@@ -3831,6 +3892,7 @@
           };
           joyZoneEl.addEventListener('pointerup', endJoy);
           joyZoneEl.addEventListener('pointercancel', endJoy);
+          joyZoneEl.addEventListener('lostpointercapture', endJoy);
 
           // Right-thumb Tactile Action Buttons (independent pointer events!)
           const btnPadJump = document.getElementById('btnPadJump');
@@ -3869,10 +3931,22 @@
 
           // Keyboard Input (Full PC Support)
           window.addEventListener('keydown', (e) => {
-            if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+            if (e.defaultPrevented || e.isComposing || e.metaKey || e.ctrlKey || e.altKey) return;
+            if (isCompactViewport() && settingsDrawerEl.classList.contains('open')) {
+              if (e.key === 'Escape') closeDrawer();
+              return;
+            }
+            const control = e.target instanceof Element ? e.target : null;
+            if (control?.closest('input, textarea, select, [contenteditable]')) return;
+            if (e.code === 'Space' && control?.closest('button:focus-visible, a:focus-visible')) return;
             appState.keys[e.code] = true;
+            if (e.code === 'Space' && appState.mode === 'world') {
+              e.preventDefault();
+              if (!e.repeat) triggerJump();
+              return;
+            }
+            if (e.repeat) return;
             if (e.code === 'KeyQ') { setQuadMode(!player.quadMode); return; }
-            if (e.code === 'Space' && appState.mode === 'world') { e.preventDefault(); triggerJump(); return; }
             const emote = player.emotes.find((em) => em.key && em.key === e.key);
             if (emote) triggerEmote(emote.id);
           });
@@ -3926,7 +4000,7 @@
           });
 
           const endCanvasPtr = (e) => {
-            appState.canvasPointers.delete(e.pointerId);
+            if (!appState.canvasPointers.delete(e.pointerId)) return;
             if (appState.canvasPointers.size === 2) {
               appState.pinchStartDist = getTwoPointerDist();
               appState.pinchStartZoom = appState.distance;
@@ -3934,6 +4008,24 @@
           };
           canvas.addEventListener('pointerup', endCanvasPtr);
           canvas.addEventListener('pointercancel', endCanvasPtr);
+          canvas.addEventListener('lostpointercapture', endCanvasPtr);
+
+          function releaseHeldControls() {
+            appState.keys = Object.create(null);
+            resetJoystick();
+            const pointerIds = [...appState.canvasPointers.keys()];
+            appState.canvasPointers.clear();
+            for (const id of pointerIds) {
+              if (canvas.hasPointerCapture(id)) canvas.releasePointerCapture(id);
+            }
+            releaseJumpBtn();
+            releaseQuadBtn();
+          }
+
+          window.addEventListener('blur', releaseHeldControls);
+          document.addEventListener('visibilitychange', () => {
+            if (document.hidden) releaseHeldControls();
+          });
 
           canvas.addEventListener('wheel', (e) => {
             e.preventDefault();
@@ -3948,10 +4040,12 @@
             if (orientTimer) clearTimeout(orientTimer);
             orientTimer = setTimeout(() => {
               rebuildRenderTargets();
+              syncDrawerAccess();
               syncVirtualPadVisibility();
             }, 140);
           }
           window.addEventListener('orientationchange', handleViewportChange);
+          window.addEventListener('resize', handleViewportChange);
           if (window.visualViewport) {
             window.visualViewport.addEventListener('resize', handleViewportChange);
           }
@@ -4273,6 +4367,7 @@
               camTarget.z + Math.cos(yawRad) * horiz
             );
             camera.lookAt(camTarget);
+            camera.updateMatrixWorld();
 
             // Project & Clamp Floating Speech Bubble inside Screen Edges (Never Overflows on Narrow Phones!)
             if (appState.bubbleTimer > 0) {
@@ -4325,6 +4420,7 @@
           }
 
           setModelStyle('ps1', false);
+          syncDrawerAccess();
           switchMode('studio');
           requestAnimationFrame(animate);
 
