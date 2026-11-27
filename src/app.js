@@ -388,15 +388,15 @@ function initApp() {
     syncPlazaAction();
   }
 
-  function startBenchClimb(withCompanion) {
+  function startBenchClimb() {
     releaseHeldControls();
     setBubble(null);
     setPlazaReply(null);
-    if (withCompanion) {
+    if (companion) {
       if (companionBeat || plazaState.servingFor > 0) companion.setEmote('normal');
       companionBeat = null;
     }
-    benchClimb.start(player, withCompanion ? companion : null);
+    benchClimb.start(player, companion);
     const { x, z } = plaza.bench.position;
     plazaState.focus = {
       point: new THREE.Vector3(x + .10, 0, z + .5),
@@ -483,9 +483,11 @@ function initApp() {
     const table = plaza.snackTable.position;
     const snackDistance = Math.hypot(player.pos.x - table.x, player.pos.z - table.z);
     const benchDistance = benchClimb.distanceToResident(player);
-    const withCompanion = companion?.onGround && benchClimb.distanceToResident(companion) <= BENCH_REACH + 1.2;
-    if ((!player.isGonyani || withCompanion) && player.onGround && benchDistance <= BENCH_REACH
-      && (snackDistance > 1.95 || benchDistance < snackDistance)) return withCompanion ? 'climbTogether' : 'climb';
+    const canClimb = companion
+      ? companion.onGround && benchClimb.distanceToResident(companion) <= BENCH_REACH + 2
+      : !player.isGonyani;
+    if (canClimb && player.onGround && benchDistance <= BENCH_REACH
+      && (snackDistance > 1.95 || benchDistance < snackDistance)) return 'climb';
     if (snackDistance <= 1.95) return 'snack';
     return cheekNuzzle.canStart(player, companion) ? 'cheek' : null;
   }
@@ -493,7 +495,7 @@ function initApp() {
   function syncPlazaAction() {
     const action = getPlazaAction();
     const labels = {
-      climb: 'のぼる', climbTogether: 'ふたりでのぼる', dismount: 'おりる',
+      climb: 'のぼる', dismount: 'おりる',
       snack: snackActions[plazaState.snack], cheek: 'ほっぺを寄せる',
     };
     const label = labels[action] || '';
@@ -503,7 +505,7 @@ function initApp() {
 
   function usePlazaAction() {
     const action = getPlazaAction();
-    if (action === 'climb' || action === 'climbTogether') startBenchClimb(action === 'climbTogether');
+    if (action === 'climb') startBenchClimb();
     else if (action === 'dismount') benchClimb.dismount();
     else if (action === 'snack') serveSnack();
     else if (action === 'cheek') startCheekNuzzle();
