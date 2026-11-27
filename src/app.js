@@ -1152,7 +1152,7 @@ function initApp() {
 
   setModelStyle('ps1', false);
   menus.syncLayout();
-  switchMode('studio');
+  switchMode(appState.mode);
   setSnackStage(0);
   requestAnimationFrame(animate);
 }
