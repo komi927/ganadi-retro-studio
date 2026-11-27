@@ -133,6 +133,33 @@
       top: calc(58px + var(--sat));
       left: calc(10px + var(--sal));
     }
+    #btnCompanion, #worldStops {
+      position: absolute;
+      right: calc(10px + var(--sar));
+      z-index: 30;
+    }
+    #btnCompanion {
+      top: calc(58px + var(--sat));
+      min-height: 36px;
+      white-space: nowrap;
+      background: #fff6db;
+    }
+    #btnCompanion[aria-pressed="true"] {
+      background: #222532;
+      color: white;
+    }
+    #worldStops {
+      top: calc(105px + var(--sat));
+      text-align: right;
+    }
+    #worldStops button {
+      min-height: 32px;
+      white-space: nowrap;
+    }
+    #btnSnackAction {
+      margin-top: 7px;
+      background: #ffd166;
+    }
     .character-btn {
       cursor: pointer;
     }
@@ -149,10 +176,17 @@
     }
     #toastContainer {
       top: calc(146px + var(--sat));
+      width: max-content;
+      max-width: calc(100% - 24px);
+      text-align: center;
+      overflow-wrap: anywhere;
+    }
+    #viewportWrap.world-mode #toastContainer {
+      top: calc(184px + var(--sat));
     }
 
-    /* Floating Speech Bubble above Ganadi */
-    #speechBubble {
+    /* キャラクターの頭上の吹き出し */
+    .speech-bubble {
       position: absolute;
       pointer-events: none;
       transform: translate(-50%, -100%);
@@ -161,7 +195,7 @@
       max-width: min(82vw, 280px);
       text-align: center;
     }
-    #speechBubble::after {
+    .speech-bubble::after {
       content: "";
       position: absolute;
       left: 50%;
@@ -171,7 +205,7 @@
       border-style: solid;
       border-color: #222532 transparent transparent transparent;
     }
-    #speechBubble::before {
+    .speech-bubble::before {
       content: "";
       position: absolute;
       left: 50%;
@@ -501,7 +535,8 @@
     <canvas id="webglCanvas"></canvas>
 
     <!-- Crisp Floating Speech Bubble (Clamped inside Viewport Edges) -->
-    <div id="speechBubble" class="hidden glass-panel border-2 border-[#222532] rounded-2xl px-3 py-1.5 text-xs sm:text-sm font-extrabold text-[#222532] whitespace-nowrap shadow-md"></div>
+    <div id="speechBubble" class="speech-bubble hidden glass-panel border-2 border-[#222532] rounded-2xl px-3 py-1.5 text-xs sm:text-sm font-extrabold text-[#222532] whitespace-nowrap shadow-md"></div>
+    <div id="plazaBubble" class="speech-bubble hidden glass-panel border-2 border-[#222532] rounded-2xl px-3 py-1.5 text-xs sm:text-sm font-extrabold text-[#222532] whitespace-nowrap shadow-md"></div>
 
     <!-- Compact Top HUD Navigation Bar -->
     <header id="topHudBar" class="absolute z-30 flex items-center justify-between gap-1.5 pointer-events-none">
@@ -536,6 +571,15 @@
     <div id="characterPicker" role="group" aria-label="操作するキャラクター" class="absolute z-30 glass-panel pixel-card rounded-2xl p-1 flex items-center gap-1">
       <button type="button" data-character="ganadi" aria-pressed="true" class="character-btn active rounded-xl px-2.5 py-1.5 text-xs font-extrabold">🐶 ガナディ</button>
       <button type="button" data-character="gonyani" aria-pressed="false" class="character-btn rounded-xl px-2.5 py-1.5 text-xs font-extrabold">🐱 ゴニャニ</button>
+    </div>
+
+    <button id="btnCompanion" type="button" class="hidden pixel-btn rounded-xl px-2.5 text-xs font-extrabold" aria-pressed="false">相方を呼ぶ</button>
+    <div id="worldStops" class="hidden">
+      <div role="group" aria-label="広場の行き先" class="flex gap-1.5">
+        <button id="btnVisitBench" type="button" aria-label="ゴンニョンイのベンチへ" class="pixel-btn glass-panel rounded-xl px-2 text-xs font-extrabold">🪑 ベンチへ</button>
+        <button id="btnVisitSnack" type="button" class="pixel-btn glass-panel rounded-xl px-2 text-xs font-extrabold">🍰 おやつ台へ</button>
+      </div>
+      <button id="btnSnackAction" type="button" title="Eキーでも操作" class="hidden pixel-btn rounded-xl px-2.5 text-xs font-extrabold"></button>
     </div>
 
     <!-- Desktop Info / Key Hints Pill (hidden on narrow mobile) -->
@@ -2567,7 +2611,141 @@
       }
 
       // =======================================================================
-      // 8. アプリと2パス描画
+      // 8. 広場のベンチとおやつ台
+      // =======================================================================
+      function buildPlaza(worldPropsGroup, mats) {
+        const box = ensureFlatNormalAttribute(new THREE.BoxGeometry(1, 1, 1), true);
+        const round = ensureFlatNormalAttribute(new THREE.SphereGeometry(1, 10, 6), true);
+        const ink = createCelMaterial('#44424a', '#292831', '#171720');
+        const dinoSkin = createCelMaterial('#F5F2EA', '#D5D1CE', '#ADA7AD');
+        const mouthMat = createCelMaterial('#655453', '#4c3b41', '#33262f');
+        const wood = createCelMaterial('#D2A77C', '#AF805E', '#8E644D');
+        const cream = createCelMaterial('#FFFAE9', '#F1DBC3', '#D0AA89');
+        const dough = createCelMaterial('#F2C87E', '#DDA464', '#B17B50');
+        const screenMat = createCelMaterial('#9ECFEC', '#6CA5C9', '#577CA5');
+
+        function part(group, geometry, material, x, y, z) {
+          const mesh = new THREE.Mesh(geometry, material);
+          mesh.position.set(x, y, z);
+          group.add(mesh);
+          return mesh;
+        }
+
+        function scaled(group, geometry, material, x, y, z, sx, sy, sz) {
+          const mesh = part(group, geometry, material, x, y, z);
+          mesh.scale.set(sx, sy, sz);
+          return mesh;
+        }
+
+        const bench = new THREE.Group();
+        bench.position.set(-1.98, 0, -3.8);
+        worldPropsGroup.add(bench);
+        for (const side of [-1, 1]) {
+          scaled(bench, box, wood, side * 1.04, .27, -.03, .16, .54, .73);
+          scaled(bench, box, wood, side * 1.04, .83, -.42, .14, .75, .13);
+        }
+        scaled(bench, box, wood, 0, .56, 0, 2.53, .13, .92);
+        for (const height of [.85, 1.08]) {
+          scaled(bench, box, wood, 0, height, -.42, 2.53, .16, .12);
+        }
+
+        // HNF資料とKakao第3弾の輪郭を立体化。白っぽい体、長い鼻先、段になった歯。
+        const resident = new THREE.Group();
+        resident.position.set(-.16, .62, .04);
+        bench.add(resident);
+        scaled(resident, round, dinoSkin, 0, .52, -.06, .58, .64, .52);
+        for (const side of [-1, 1]) {
+          const thigh = scaled(resident, round, dinoSkin, side * .36, .16, .32, .26, .26, .44);
+          thigh.rotation.y = side * .23;
+          scaled(resident, round, dinoSkin, side * .43, -.10, .59, .22, .19, .33);
+          const arm = scaled(resident, round, dinoSkin, side * .36, .74, .44, .17, .14, .29);
+          arm.rotation.y = -side * .56;
+        }
+        const tail = createLowPolyLathe([
+          { y: 0, sx: 1, sz: 1 },
+          { y: 6, sx: .76, sz: .72 },
+          { y: 13, sx: .49, sz: .43, zOff: 2.4 },
+          { y: 20, sx: .22, sz: .21, zOff: 4.5 },
+          { y: 23, sx: .04, sz: .04, zOff: 7.2 },
+        ], HEX_RING, 6.4, 5.2);
+        part(resident, tail, dinoSkin, .34, .28, -.21).rotation.set(.17, 0, -1.49);
+
+        const phone = new THREE.Group();
+        phone.position.set(0, .82, .68);
+        phone.rotation.x = -1.10;
+        scaled(phone, box, ink, 0, 0, 0, .25, .39, .042);
+        scaled(phone, box, screenMat, 0, .008, -.024, .207, .31, .009);
+        resident.add(phone);
+
+        const head = new THREE.Group();
+        head.position.set(0, 1.32, -.01);
+        resident.add(head);
+        const skull = createLowPolyLathe([
+          { y: -10, sx: .49, sz: .55 },
+          { y: -7, sx: .75, sz: .79 },
+          { y: -2, sx: .92, sz: 1, zOff: -.6 },
+          { y: 4, sx: 1, sz: 1, zOff: -.9 },
+          { y: 9, sx: .88, sz: .86, zOff: -.8 },
+          { y: 11.9, sx: .72, sz: .65, zOff: -.9 },
+          { y: 13.1, sx: .45, sz: .33, zOff: -.9 },
+        ], HEAD_PROFILE, 11.8, 10.5);
+        part(head, skull, dinoSkin, 0, 0, 0);
+        scaled(head, round, mouthMat, 0, -.32, .61, .488, .24, .43);
+        scaled(head, round, dinoSkin, 0, -.50, .51, .495, .185, .48);
+        scaled(head, round, dinoSkin, 0, -.042, .59, .55, .29, .57);
+        const toothGeo = ensureFlatNormalAttribute(new THREE.ConeGeometry(1, 1, 4), true);
+        for (let index = -3; index <= 3; index++) {
+          const curve = (index / 3) ** 2;
+          const z = .996 - curve * .19;
+          const top = scaled(head, toothGeo, mats.fur, index * .125, -.245 - curve * .018, z, .055, .165, .058);
+          top.rotation.z = Math.PI + index * .045;
+          scaled(head, toothGeo, mats.fur, index * .119, -.425 + curve * .012, z - .006, .043, .105, .043);
+        }
+        for (const side of [-1, 1]) {
+          scaled(head, round, dinoSkin, side * .29, .445, .287, .228, .18, .21);
+          const eye = scaled(head, round, ink, side * .28, .35, .466, .075, .06, .044);
+          eye.rotation.y = side * .26;
+          scaled(head, round, mats.fur, side * .28 - .017, .365, .508, .018, .018, .012);
+          const brow = scaled(head, round, ink, side * .28, .465, .476, .095, .024, .037);
+          brow.rotation.z = side * -.24;
+          scaled(head, round, ink, side * .163, .097, 1.077, .044, .026, .025).rotation.z = side * -.25;
+        }
+
+        const snackTable = new THREE.Group();
+        snackTable.position.set(.29, 0, -3.18);
+        worldPropsGroup.add(snackTable);
+        const tabletop = ensureFlatNormalAttribute(new THREE.CylinderGeometry(.94, .9, .14, 12), true);
+        for (const [x, z] of [[-.53, -.48], [.53, -.48], [-.53, .48], [.53, .48]]) {
+          scaled(snackTable, box, wood, x, .34, z, .15, .68, .15);
+        }
+        part(snackTable, tabletop, cream, 0, .74, 0);
+
+        const cup = ensureFlatNormalAttribute(new THREE.CylinderGeometry(.168, .117, .16, 10), true);
+        const plate = ensureFlatNormalAttribute(new THREE.CylinderGeometry(.24, .19, .035, 10), true);
+        const berry = ensureFlatNormalAttribute(new THREE.IcosahedronGeometry(1, 0), true);
+        function cupcake(group, x, y, z) {
+          const dish = new THREE.Group();
+          dish.position.set(x, y, z);
+          group.add(dish);
+          part(dish, plate, mats.bowlBlue, 0, .018, 0);
+          part(dish, cup, dough, 0, .112, 0);
+          scaled(dish, round, cream, 0, .22, 0, .165, .095, .165);
+          scaled(dish, round, cream, 0, .277, 0, .107, .078, .108);
+          const topping = new THREE.Group();
+          scaled(topping, berry, mats.roseRed, 0, .373, 0, .068, .096, .065).rotation.z = -.25;
+          scaled(topping, round, mats.stemGreen, .02, .445, 0, .073, .018, .048);
+          dish.add(topping);
+          return { dish, topping };
+        }
+        const center = cupcake(snackTable, 0, .81, .08);
+        const left = cupcake(snackTable, -.49, .81, -.14).dish;
+        const right = cupcake(snackTable, .49, .81, -.14).dish;
+        const residentSnack = cupcake(bench, .88, .625, .18).dish;
+        return { bench, resident, head, phone, snackTable, center, left, right, residentSnack };
+      }
+
+      // =======================================================================
+      // 9. アプリと2パス描画
       // =======================================================================
       function initApp() {
         try {
@@ -2864,6 +3042,7 @@
             cooldown: 0,
             hop: 0,
           };
+          const plaza = buildPlaza(worldPropsGroup, mats);
 
           // Rising steam puffs above white rice bowl
           const steamPuffs = [];
@@ -2904,6 +3083,15 @@
           players.gonyani.setVisible(false);
           player.pos.set(0, 0, 0.6);
           const crowd = [];
+          let companion = null;
+          let companionBeat = null;
+          let plazaReply = null;
+          const plazaState = { snack: 0, servingFor: 0, attention: 0, focus: null };
+          const snackActions = ['🍓 いちごをのせる', '🍰 おやつを分ける', '↺ もう一度つくる'];
+          const obstacles = [...trees,
+            { x: plaza.bench.position.x, z: plaza.bench.position.z, r: .64 },
+            { x: plaza.snackTable.position.x, z: plaza.snackTable.position.z, r: .59 },
+          ];
 
           // ===================================================================
           // 9. 描画解像度と輪郭線の合成
@@ -3041,6 +3229,10 @@
           };
 
           const speechBubbleEl = document.getElementById('speechBubble');
+          const plazaBubbleEl = document.getElementById('plazaBubble');
+          const companionButton = document.getElementById('btnCompanion');
+          const worldStopsEl = document.getElementById('worldStops');
+          const snackActionButton = document.getElementById('btnSnackAction');
           const settingsDrawerEl = document.getElementById('settingsDrawer');
           const settingsButtonEl = document.getElementById('btnOpenSettings');
           const drawerBackdropEl = document.getElementById('drawerBackdrop');
@@ -3055,7 +3247,7 @@
           function showToast(msg) {
             const container = document.getElementById('toastContainer');
             const el = document.createElement('div');
-            el.className = 'toast-anim glass-panel pixel-card rounded-2xl px-4 py-2 text-xs sm:text-sm font-extrabold text-[#222532] whitespace-nowrap';
+            el.className = 'toast-anim glass-panel pixel-card rounded-2xl px-4 py-2 text-xs sm:text-sm font-extrabold text-[#222532]';
             el.textContent = msg;
             container.innerHTML = '';
             container.appendChild(el);
@@ -3065,6 +3257,12 @@
             appState.bubbleTimer = text ? duration : 0;
             speechBubbleEl.textContent = text || '';
             speechBubbleEl.classList.toggle('hidden', !text);
+          }
+
+          function setPlazaReply(speaker, text, duration = 2.6) {
+            plazaReply = speaker ? { speaker, remaining: duration } : null;
+            plazaBubbleEl.textContent = text || '';
+            plazaBubbleEl.classList.toggle('hidden', !speaker);
           }
 
           function syncCameraSliders(force = false) {
@@ -3093,7 +3291,7 @@
           }
 
           function updateHudTag() {
-            const count = 1 + crowd.length;
+            const count = 1 + crowd.length + Number(Boolean(companion));
             const tris = player.getTriangleCount();
             const styleIcon = appState.styleMode === 'lowpoly' ? 'ローポリ' : (appState.styleMode === 'ps1' ? 'PS1レトロ' : 'なめらか');
             document.getElementById('hudResTag').textContent =
@@ -3115,6 +3313,7 @@
 
             // Update geometry across player & all crowd Ganadis
             player.setStyle(styleMode);
+            companion?.setStyle(styleMode);
             crowd.forEach((npc) => npc.setStyle(styleMode));
 
             appState.flatShading = !isSmooth;
@@ -3179,6 +3378,7 @@
             if (!em) return;
             player.setEmote(em.id);
             setBubble(em.bubble, 4.2);
+            if (appState.mode === 'world' && companion) queueCompanionReply(em.id);
             playSfx('emote');
             updateEmoteUI();
             updateHudTag();
@@ -3217,6 +3417,7 @@
             player.updateAnimation(0, Math.hypot(player.vel.x, player.vel.z), false, appState.mode === 'studio');
             player.setVisible(true);
             setBubble(null);
+            if (companion) createCompanion(companion.pos.clone());
             characterButtons.forEach((btn) => {
               const active = btn.dataset.character === id;
               btn.classList.toggle('active', active);
@@ -3233,6 +3434,125 @@
               player.onGround = false;
               playSfx('jump');
             }
+          }
+
+          function createCompanion(position) {
+            dismissCompanion();
+            const character = player.isGonyani ? CHARACTERS.ganadi : CHARACTERS.gonyani;
+            companion = new StudioCharacter(character, characterAssets[character.id], worldScene, charScene, false, appState.styleMode);
+            companion.pos.copy(position);
+            companion.yaw = appState.yawDeg * RAD;
+            companion.setVisible(appState.mode === 'world');
+            companion.updateAnimation(0, 0, false, false);
+            companionButton.textContent = '相方を帰す';
+            companionButton.setAttribute('aria-pressed', 'true');
+            updateHudTag();
+          }
+
+          function dismissCompanion() {
+            if (!companion) return;
+            companion.dispose(worldScene, charScene);
+            companion = null;
+            companionBeat = null;
+            if (plazaReply?.speaker === 'companion') setPlazaReply(null);
+            companionButton.textContent = '相方を呼ぶ';
+            companionButton.setAttribute('aria-pressed', 'false');
+            updateHudTag();
+          }
+
+          function queueCompanionReply(emoteId) {
+            if (companionBeat) companion.setEmote('normal');
+            companionBeat = null;
+            if (plazaReply?.speaker === 'companion') setPlazaReply(null);
+            const reply = player.isGonyani
+              ? ({ stare: 'du', wary: 'hug' })[emoteId]
+              : ({ happy: 'stare', hug: 'stare' })[emoteId];
+            if (reply) companionBeat = { emote: reply, wait: .65, remaining: 2.8 };
+          }
+
+          function companionSpot(target) {
+            if (plazaState.focus) return target.copy(plazaState.focus.companion);
+            const angle = appState.yawDeg * RAD;
+            const edge = WORLD_HALF - 1.25;
+            const dx = -Math.cos(angle) * 1.58;
+            const dz = Math.sin(angle) * 1.58;
+            const side = Math.abs(player.pos.x + dx) > edge || Math.abs(player.pos.z + dz) > edge ? -1 : 1;
+            return target.set(
+              clamp(player.pos.x + dx * side, -edge, edge),
+              0,
+              clamp(player.pos.z + dz * side, -edge, edge)
+            );
+          }
+
+          function visitPlazaSpot(spot) {
+            if (appState.mode !== 'world') return;
+            releaseHeldControls();
+            const bench = spot === 'bench';
+            const place = bench ? plaza.bench.position : plaza.snackTable.position;
+            player.pos.set(place.x + (bench ? 1.35 : 1.42), 0, place.z + (bench ? 1.45 : .88));
+            player.vel.set(0, 0, 0);
+            player.onGround = true;
+            player.yaw = bench ? -.18 : .28;
+            appState.yawDeg = bench ? 352 : 6;
+            appState.pitchDeg = bench ? 13 : 20;
+            const horizontalSpan = 2 * Math.tan(camera.fov * RAD / 2) * camera.aspect;
+            appState.distance = clamp((bench ? 4.4 : 5.6) / horizontalSpan + .6, 8.4, 21);
+            appState.targetYawDeg = appState.targetPitchDeg = null;
+            appState.autoRotate = false;
+            document.getElementById('chkAutoRot').checked = false;
+            plazaState.focus = {
+              point: new THREE.Vector3(place.x + (bench ? .27 : -.36), 1.4, place.z + .43),
+              companion: new THREE.Vector3(place.x - (bench ? .94 : 1.21), 0, place.z + .80),
+            };
+            if (companion) {
+              companionSpot(companion.pos);
+              companion.vel.set(0, 0, 0);
+              companion.onGround = true;
+            }
+            syncSnackButton();
+          }
+
+          function setSnackStage(stage) {
+            plazaState.snack = stage;
+            plaza.center.topping.visible = stage >= 1;
+            plaza.left.visible = plaza.right.visible = plaza.residentSnack.visible = stage === 2;
+            syncSnackButton();
+          }
+
+          function syncSnackButton() {
+            const p = plaza.snackTable.position;
+            const near = appState.mode === 'world' && Math.hypot(player.pos.x - p.x, player.pos.z - p.z) <= 1.95;
+            snackActionButton.classList.toggle('hidden', !near);
+            const label = snackActions[plazaState.snack];
+            if (snackActionButton.textContent !== label) snackActionButton.textContent = label;
+            return near;
+          }
+
+          function serveSnack() {
+            if (!syncSnackButton()) return;
+            const stage = (plazaState.snack + 1) % 3;
+            setSnackStage(stage);
+            if (stage === 0) {
+              plazaState.servingFor = 0;
+              if (companion?.activeEmote === 'sit') companion.setEmote('normal');
+              if (plazaReply?.speaker === 'resident') setPlazaReply(null);
+              return;
+            }
+            const table = plaza.snackTable.position;
+            spawnRiceSparkles(table);
+            playSfx('eat');
+            if (stage === 1) return;
+
+            visitPlazaSpot('snack');
+            plazaState.servingFor = 4.8;
+            if (!companion) createCompanion(plazaState.focus.companion);
+            companionBeat = null;
+            companion.setEmote('sit');
+            player.setEmote('sit');
+            setBubble(player.isGonyani ? '…' : 'もぐ もぐ', 3.2);
+            setPlazaReply('resident', '…ありがとう', 3.3);
+            updateEmoteUI();
+            updateHudTag();
           }
 
           function spawnCrowd(num = 5) {
@@ -3321,12 +3641,21 @@
             appState.targetYawDeg = null;
             appState.targetPitchDeg = null;
             releaseHeldControls();
+            plazaState.focus = null;
+            plazaState.attention = 0;
+            plazaState.servingFor = 0;
+            companionBeat = null;
+            companion?.setEmote('normal');
+            setBubble(null);
+            setPlazaReply(null);
             const isWorld = mode === 'world';
+            viewportWrap.classList.toggle('world-mode', isWorld);
             worldMeadowGroup.visible = isWorld;
             worldPropsGroup.visible = isWorld;
             treeOccluders.visible = isWorld;
             studioPedestalGroup.visible = !isWorld;
             crowd.forEach((npc) => npc.setVisible(isWorld));
+            companion?.setVisible(isWorld);
 
             const isPortrait = viewW < viewH;
             if (!isWorld) {
@@ -3348,6 +3677,9 @@
 
             document.getElementById('btnQuickSpawn').classList.toggle('hidden', !isWorld);
             document.getElementById('crowdPanel').classList.toggle('hidden', !isWorld);
+            worldStopsEl.classList.toggle('hidden', !isWorld);
+            companionButton.classList.toggle('hidden', !isWorld);
+            syncSnackButton();
             document.getElementById('worldKeyHints').classList.toggle('hidden', !isWorld);
             document.getElementById('studioHintText').classList.toggle('hidden', isWorld);
 
@@ -3386,6 +3718,17 @@
           document.getElementById('btnQuickSpawn').addEventListener('click', () => spawnCrowd(5));
           document.getElementById('btnSpawn5').addEventListener('click', () => spawnCrowd(5));
           document.getElementById('btnClearCrowd').addEventListener('click', clearCrowd);
+          companionButton.addEventListener('click', () => {
+            if (appState.mode !== 'world') return;
+            if (companion) {
+              dismissCompanion();
+            } else {
+              createCompanion(companionSpot(new THREE.Vector3()));
+            }
+          });
+          document.getElementById('btnVisitBench').addEventListener('click', () => visitPlazaSpot('bench'));
+          document.getElementById('btnVisitSnack').addEventListener('click', () => visitPlazaSpot('snack'));
+          snackActionButton.addEventListener('click', serveSnack);
           document.getElementById('btnStyleBiped').addEventListener('click', () => setQuadMode(false));
           document.getElementById('btnStyleQuad').addEventListener('click', () => setQuadMode(true));
 
@@ -3406,6 +3749,7 @@
             appState.distance = appState.mode === 'world' ? (isPortrait ? 11.2 : 10.0) : (isPortrait ? 7.6 : 6.2);
             appState.targetYawDeg = null;
             appState.targetPitchDeg = null;
+            plazaState.focus = null;
             player.pos.set(0, 0, appState.mode === 'world' ? 0.6 : 0);
             player.vel.set(0, 0, 0);
             player.yaw = 0;
@@ -3473,7 +3817,8 @@
           // 現在の解像度で透過PNGを保存
           document.getElementById('btnExportPng').addEventListener('click', () => {
             finishPlayerWalkTransition();
-            const hidden = [worldPropsGroup, treeOccluders, ...crowd.map((c) => c.root)].filter((obj) => obj.visible);
+            const hidden = [worldPropsGroup, treeOccluders, companion?.root, ...crowd.map((c) => c.root)]
+              .filter((obj) => obj?.visible);
             const previousTarget = renderer.getRenderTarget();
             const raw = new Uint8Array(targetW * targetH * 4);
             try {
@@ -3946,6 +4291,7 @@
               return;
             }
             if (e.repeat) return;
+            if (e.code === 'KeyE' && appState.mode === 'world') { serveSnack(); return; }
             if (e.code === 'KeyQ') { setQuadMode(!player.quadMode); return; }
             const emote = player.emotes.find((em) => em.key && em.key === e.key);
             if (emote) triggerEmote(emote.id);
@@ -4055,6 +4401,7 @@
           // ===================================================================
           const camTarget = new THREE.Vector3(0, 1.1, 0);
           const _projVec = new THREE.Vector3();
+          const companionGoal = new THREE.Vector3();
 
           function interactWithWorld(ch, dt, isPlayer) {
             if (!ch.onGround || ch.vel.y !== 0) {
@@ -4071,8 +4418,7 @@
             ch.pos.x = clamp(ch.pos.x, -lim, lim);
             ch.pos.z = clamp(ch.pos.z, -lim, lim);
 
-            for (let i = 0; i < trees.length; i++) {
-              const tr = trees[i];
+            for (const tr of obstacles) {
               const dx = ch.pos.x - tr.x, dz = ch.pos.z - tr.z;
               const d = Math.hypot(dx, dz);
               const minD = tr.r + 0.55;
@@ -4130,6 +4476,92 @@
             }
           }
 
+          function updatePlaza(dt, timeSec) {
+            const bench = plaza.bench.position;
+            const dx = player.pos.x - bench.x - plaza.resident.position.x;
+            const dz = player.pos.z - bench.z;
+            const oldAttention = plazaState.attention;
+            const near = Math.hypot(dx, dz) < (oldAttention > 0 ? 2.55 : 2.22);
+            plazaState.attention = near ? oldAttention + dt : 0;
+            const lookingUp = plazaState.attention > .24 || plazaState.servingFor > 0;
+            const turn = lookingUp ? clamp(Math.atan2(dx, dz), -.58, .58) : 0;
+            const nod = plazaState.servingFor > 0 ? .055 * Math.sin(timeSec * 9) : 0;
+            const follow = Math.min(1, dt * 6);
+            plaza.head.rotation.y += (turn - plaza.head.rotation.y) * follow;
+            plaza.head.rotation.x += ((lookingUp ? -.045 + nod : .22) - plaza.head.rotation.x) * follow;
+            plaza.phone.rotation.x += ((lookingUp ? -1.36 : -1.1) - plaza.phone.rotation.x) * follow;
+            if (oldAttention < .65 && plazaState.attention >= .65 && !plazaReply) {
+              setPlazaReply('resident', '…', 1.7);
+            }
+            if (plazaState.servingFor > 0) {
+              plazaState.servingFor = Math.max(0, plazaState.servingFor - dt);
+              if (plazaState.servingFor === 0 && companion?.activeEmote === 'sit') companion.setEmote('normal');
+            }
+            syncSnackButton();
+          }
+
+          function updateCompanion(dt) {
+            if (!companion) return;
+            const dx = player.pos.x - companion.pos.x;
+            const dz = player.pos.z - companion.pos.z;
+            const near = Math.hypot(dx, dz) < 2.65;
+            const beat = companionBeat;
+            if (beat) {
+              if (beat.wait > 0) {
+                beat.wait -= dt;
+                if (beat.wait <= 0) {
+                  companion.setEmote(beat.emote);
+                  setPlazaReply('companion', companion.emotes.find((emote) => emote.id === beat.emote).bubble);
+                }
+              } else {
+                beat.remaining -= dt;
+                if (beat.remaining <= 0) {
+                  companion.setEmote('normal');
+                  companionBeat = null;
+                }
+              }
+            }
+
+            const atTable = plazaState.servingFor > 0 && near;
+            let speed = 0;
+            const viewYaw = appState.yawDeg * RAD;
+            let aim = viewYaw;
+            if ((companionBeat && near) || atTable) {
+              const sideLook = THREE.MathUtils.euclideanModulo(Math.atan2(dx, dz) - viewYaw + Math.PI, 2 * Math.PI) - Math.PI;
+              aim += clamp(sideLook, -.68, .68);
+            } else {
+              companionSpot(companionGoal);
+              const sx = companionGoal.x - companion.pos.x;
+              const sz = companionGoal.z - companion.pos.z;
+              const distance = Math.hypot(sx, sz);
+              if (distance > .14) {
+                speed = Math.min(6, (distance - .14) * 3.6);
+                const step = Math.min(distance, dt * speed) / distance;
+                companion.pos.x += sx * step;
+                companion.pos.z += sz * step;
+                aim = Math.atan2(sx, sz);
+              }
+            }
+            const turn = THREE.MathUtils.euclideanModulo(aim - companion.yaw + Math.PI, 2 * Math.PI) - Math.PI;
+            companion.yaw += turn * Math.min(1, dt * 9);
+            if (!plazaState.focus) interactWithWorld(companion, dt, false);
+            companion.updateAnimation(dt, speed, speed > 3.8, false);
+          }
+
+          function projectBubble(element, worldPos, hideOutside = false) {
+            worldPos.project(camera);
+            const rawX = (worldPos.x * .5 + .5) * viewW;
+            const rawY = (-worldPos.y * .5 + .5) * viewH - 14;
+            const halfW = (element.offsetWidth || 110) * .5 + 12;
+            const topClearance = appState.mode !== 'world' ? 103
+              : (isCompactViewport() ? (rawX > viewW * .60 ? 176 : 104) : 155);
+            const minY = topClearance + (element.offsetHeight || 34);
+            const outside = rawX < 0 || rawX > viewW || rawY < 0 || rawY > viewH || Math.abs(worldPos.z) > 1;
+            element.style.visibility = hideOutside && outside ? 'hidden' : '';
+            element.style.left = `${Math.round(clamp(rawX, halfW, Math.max(halfW, viewW - halfW)))}px`;
+            element.style.top = `${Math.round(clamp(rawY, minY, Math.max(minY, viewH - 165)))}px`;
+          }
+
           function updateSimulation(dt, timeSec) {
             const isDraggingCanvas = appState.canvasPointers.size > 0;
             if (appState.autoRotate && !isDraggingCanvas) {
@@ -4183,6 +4615,7 @@
               }
 
               const moving = moveMag > 0;
+              if (moving) plazaState.focus = null;
               const sprinting = moving && !!(k['ShiftLeft'] || k['ShiftRight'] || appState.dashLock || appState.joy.autoDash);
 
               if (moving) {
@@ -4211,9 +4644,11 @@
               player.pos.z += player.vel.z * dt;
               interactWithWorld(player, dt, true);
               player.updateAnimation(dt, Math.hypot(player.vel.x, player.vel.z), sprinting, false);
+              updatePlaza(dt, timeSec);
+              updateCompanion(dt);
 
               // Autonomous AI Crowd Ganadis
-              const allChars = [player].concat(crowd);
+              const allChars = companion ? [player, companion, ...crowd] : [player, ...crowd];
               for (let i = 0; i < crowd.length; i++) {
                 const npc = crowd[i];
                 npc.aiTimer -= dt;
@@ -4353,10 +4788,14 @@
             }
 
             // Orbit Camera Update
-            const focusX = isStudio ? 0 : player.pos.x;
-            const focusY = (isStudio ? 0 : player.pos.y) + 1.15;
-            const focusZ = isStudio ? 0 : player.pos.z;
-            camTarget.lerp(new THREE.Vector3(focusX, focusY, focusZ), Math.min(1, dt * 8));
+            const focus = isStudio
+              ? _projVec.set(0, 1.15, 0)
+              : (plazaState.focus?.point || _projVec.set(player.pos.x, player.pos.y + 1.15, player.pos.z));
+            if (!isStudio && !plazaState.focus && companion && companion.pos.distanceTo(player.pos) < 2.7) {
+              focus.x += (companion.pos.x - player.pos.x) * .34;
+              focus.z += (companion.pos.z - player.pos.z) * .34;
+            }
+            camTarget.lerp(focus, Math.min(1, dt * 8));
 
             const yawRad = appState.yawDeg * RAD;
             const pitchRad = appState.pitchDeg * RAD;
@@ -4375,17 +4814,21 @@
               if (appState.bubbleTimer <= 0) {
                 setBubble(null, 0);
               } else {
-                player.getHeadTopWorldPos(_projVec);
-                _projVec.project(camera);
-                const rawX = (_projVec.x * 0.5 + 0.5) * viewW;
-                const rawY = (-_projVec.y * 0.5 + 0.5) * viewH - 14;
-                const halfW = (speechBubbleEl.offsetWidth || 110) * 0.5 + 12;
-                const bHeight = (speechBubbleEl.offsetHeight || 34);
-                const clampedX = clamp(rawX, halfW, Math.max(halfW, viewW - halfW));
-                const minY = 103 + bHeight;
-                const clampedY = clamp(rawY, minY, Math.max(minY, viewH - 165));
-                speechBubbleEl.style.left = `${Math.round(clampedX)}px`;
-                speechBubbleEl.style.top = `${Math.round(clampedY)}px`;
+                projectBubble(speechBubbleEl, player.getHeadTopWorldPos(_projVec));
+              }
+            }
+            if (plazaReply) {
+              plazaReply.remaining -= dt;
+              if (plazaReply.remaining <= 0) {
+                setPlazaReply(null);
+              } else {
+                if (plazaReply.speaker === 'resident') {
+                  plaza.head.getWorldPosition(_projVec);
+                  _projVec.y += .82;
+                } else {
+                  companion.getHeadTopWorldPos(_projVec);
+                }
+                projectBubble(plazaBubbleEl, _projVec, true);
               }
             }
           }
@@ -4422,6 +4865,7 @@
           setModelStyle('ps1', false);
           syncDrawerAccess();
           switchMode('studio');
+          setSnackStage(0);
           requestAnimationFrame(animate);
 
         } catch (err) {
