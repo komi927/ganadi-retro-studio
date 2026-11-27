@@ -1133,7 +1133,9 @@
       }
 
       // 頭の前面の三角形に、正面から投影した表情を重ねる。
-      function createLowPolyFacePatchGeometry(head) {
+      function createLowPolyFacePatchGeometry(head, {
+        width = FACE_WIDTH, bottom = FACE_BOTTOM, top = FACE_TOP,
+      } = {}) {
         const triangles = head.index ? head.toNonIndexed() : head;
         const position = triangles.attributes.position;
         const positions = [];
@@ -1151,8 +1153,8 @@
             const z = position.getZ(j);
             positions.push(x, y + HEAD_LOCAL_CY * S, z + .10 * S);
             uvs.push(
-              .5 + x / (FACE_WIDTH * S),
-              (y / S + HEAD_CENTER_Y - FACE_BOTTOM) / (FACE_TOP - FACE_BOTTOM)
+              .5 + x / (width * S),
+              (y / S + HEAD_CENTER_Y - bottom) / (top - bottom)
             );
           }
         }
@@ -1450,7 +1452,7 @@
             const eye = new Path2D('M-10.5 0 C-10.5 -5 -6.5 -8.6 0 -8.5 C6 -8.5 10.7 -5.2 10.7 .2 C10.7 5.9 6.6 8.3 0 8.3 C-6.8 8.3 -10.5 5.4 -10.5 0Z');
             [-1, 1].forEach((side) => {
               ctx.save();
-              ctx.translate(32 + side * 17.5, 31.5);
+              ctx.translate(32 + side * 17.5, 33);
               ctx.rotate(side * (wary ? -.25 : -.055));
               ctx.scale(side, wary ? .68 : 1);
               ctx.fillStyle = INK;
@@ -1843,18 +1845,24 @@
       // 7. ARTICULATED 3D GANADI CHARACTER RIG (LOW-POLY + SMOOTH SWITCHABLE)
       // =======================================================================
       function buildGonyaniAssets(assets) {
-        // HNFのキャラクター資料とフィギュアの正面・側面・背面を参照。
+        // HNFのキャラクター資料（5・8ページ）とLINE第2弾の正面絵を参照。
+        // 耳を除く輪郭は横長。頬を張らせ、あごの接続位置は保つ。
         const headRings = [
-          { y: -12.1, sx: .37, sz: .37, zOff: .45 },
-          { y: -10.8, sx: .68, sz: .65, zOff: .40 },
-          { y: -8.9,  sx: .89, sz: .84, zOff: .12 },
-          { y: -5.1,  sx: 1.0, sz: .99, zOff: -.36 },
-          { y: -.7,   sx: .97, sz: 1.0, zOff: -.55 },
-          { y: 4.2,   sx: .86, sz: .91, zOff: -.53 },
-          { y: 8.2,   sx: .74, sz: .72, zOff: -.34 },
-          { y: 11.3,  sx: .50, sz: .48, zOff: -.10 },
-          { y: 12.6,  sx: .16, sz: .17 },
+          { y: -12.1, sx: .51, sz: .37, zOff: .45 },
+          { y: -11.0, sx: .77, sz: .65, zOff: .40 },
+          { y: -8.7,  sx: .94, sz: .84, zOff: .12 },
+          { y: -5.2,  sx: 1.0, sz: .99, zOff: -.36 },
+          { y: -1.2,  sx: .96, sz: 1.0, zOff: -.55 },
+          { y: 2.6,   sx: .87, sz: .91, zOff: -.53 },
+          { y: 6.0,   sx: .77, sz: .72, zOff: -.34 },
+          { y: 8.2,   sx: .59, sz: .48, zOff: -.10 },
+          { y: 9.3,   sx: .31, sz: .19 },
         ];
+        const faceArea = {
+          width: 23.4,
+          bottom: HEAD_CENTER_Y + headRings[0].y,
+          top: HEAD_CENTER_Y + headRings[headRings.length - 1].y,
+        };
         const earRings = [
           { y: -.6, sx: .57, sz: .62 },
           { y: 1.5, sx: 1.0, sz: 1.0 },
@@ -1895,12 +1903,12 @@
         const buildGeometry = (flat) => {
           const shell = (rings, rx, rz, profile = ROUND_RING) =>
             createLowPolyLathe(rings, flat ? profile : smoothRing, rx, rz, flat);
-          const head = shell(headRings, 14.15, 10.6, HEAD_PROFILE);
+          const head = shell(headRings, 15.8, 10.6, HEAD_PROFILE);
           const ear = shell(earRings, 4.25, 2.7, HEX_RING);
           return {
             ...(flat ? assets.lowGeos : assets.smoothGeos),
             head,
-            facePatch: createLowPolyFacePatchGeometry(head),
+            facePatch: createLowPolyFacePatchGeometry(head, faceArea),
             earL: ear,
             earR: ear,
             torsoBiped: shell(torsoRings, 7.4, 6.9),
@@ -2147,12 +2155,12 @@
           headShape.add(this.earRPivot);
 
           if (this.isGonyani) {
-            this.earLPivot.position.set(-9.3 * S, 18.9 * S, .10 * S);
-            this.earRPivot.position.set(9.3 * S, 18.9 * S, .10 * S);
+            this.earLPivot.position.set(-10.7 * S, 16.8 * S, .10 * S);
+            this.earRPivot.position.set(10.7 * S, 16.8 * S, .10 * S);
             earLMesh.position.set(0, 0, 0);
             earRMesh.position.set(0, 0, 0);
-            earLMesh.rotation.set(.12, 0, .59);
-            earRMesh.rotation.set(.12, 0, -.59);
+            earLMesh.rotation.set(.12, 0, .76);
+            earRMesh.rotation.set(.12, 0, -.76);
           }
 
           // ---- HEAD 3D PROPS (Halo / Horns / Rose) ----
@@ -2534,7 +2542,8 @@
         }
 
         getHeadTopWorldPos(target) {
-          const topY = THREE.MathUtils.lerp(50.5, 42.5, this.quadBlend) * S;
+          const headOffset = this.isGonyani ? 3 : 0;
+          const topY = (THREE.MathUtils.lerp(50.5, 42.5, this.quadBlend) - headOffset) * S;
           target.set(this.pos.x, this.pos.y + topY, this.pos.z);
           return target;
         }
