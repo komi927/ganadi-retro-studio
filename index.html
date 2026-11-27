@@ -156,6 +156,28 @@
       min-height: 32px;
       white-space: nowrap;
     }
+    #sceneActions {
+      position: absolute;
+      z-index: 28;
+      left: 50%;
+      bottom: calc(18px + var(--sab));
+      transform: translateX(-50%);
+      white-space: nowrap;
+    }
+    #sceneActions button {
+      min-height: 34px;
+    }
+    #formMenu {
+      position: absolute;
+      bottom: calc(100% + 8px);
+      left: 0;
+      width: max-content;
+    }
+    #formMenu button {
+      display: block;
+      width: 100%;
+      text-align: left;
+    }
     #btnSnackAction {
       margin-top: 7px;
       background: #ffd166;
@@ -431,6 +453,12 @@
       #mobileEmoteBar {
         display: block;
       }
+      #sceneActions {
+        bottom: calc(61px + var(--sab));
+      }
+      .with-pad #sceneActions {
+        bottom: calc(190px + var(--sab));
+      }
       #drawerBackdrop {
         display: block;
         position: fixed;
@@ -490,6 +518,16 @@
       #btnPadJump { width: 60px; height: 60px; font-size: 10px; }
       #btnPadQuad, #btnPadDash { width: 46px; height: 46px; font-size: 9px; }
       #mobileEmoteBar { bottom: calc(114px + var(--sab)); }
+      .with-pad #sceneActions { bottom: calc(152px + var(--sab)); }
+      #formMenu:not(.hidden) {
+        left: 50%;
+        max-width: 92vw;
+        transform: translateX(-50%);
+        display: flex;
+        justify-content: center;
+        flex-wrap: wrap;
+      }
+      #formMenu button { width: auto; }
       .emote-pill { padding: 4px 9px; font-size: 11px; }
     }
 
@@ -599,6 +637,13 @@
     <!-- Mobile Horizontal Scrollable Emote Pill Strip (1-Thumb Swipe & Tap) -->
     <div id="mobileEmoteBar" class="no-scrollbar">
       <div id="mobileEmoteStrip"></div>
+    </div>
+
+    <div id="sceneActions" class="flex gap-1.5">
+      <button id="btnForms" type="button" aria-expanded="false" aria-controls="formMenu" class="pixel-btn glass-panel rounded-xl px-2.5 text-xs font-extrabold">🐾 かたち</button>
+      <button id="btnPet" type="button" title="Fキー、またはキャラを直接タップ" class="pixel-btn glass-panel rounded-xl px-2.5 text-xs font-extrabold">✋ なでる</button>
+      <button id="btnScenePhoto" type="button" title="広場やスタジオを背景ごとPNGで保存" class="pixel-btn glass-panel rounded-xl px-2.5 text-xs font-extrabold">📷 写真</button>
+      <div id="formMenu" class="hidden glass-panel pixel-card rounded-2xl p-1.5" role="group" aria-label="かたちを選ぶ"></div>
     </div>
 
     <!-- Multi-Touch Virtual Gamepad (Analog Joystick + Right-Thumb Round Action Buttons) -->
@@ -779,7 +824,7 @@
       <!-- All 12 Expressions & Poses -->
       <div>
         <div class="flex items-center justify-between mb-1.5">
-          <span class="text-[11px] font-extrabold text-slate-600">😊 表情・ポーズ (全12種)</span>
+          <span class="text-[11px] font-extrabold text-slate-600">😊 表情・ポーズ</span>
           <span class="mono text-[10px] text-slate-400 font-bold">1-0キー</span>
         </div>
         <div id="emoteGrid" class="grid grid-cols-2 gap-1.5"></div>
@@ -835,6 +880,10 @@
         { id: 'rose',   label: 'バラ',           icon: '🌹', face: 'normal', pose: 'rose',   key: '0', prop: 'rose' },
         { id: 'sit',    label: 'おすわり',       icon: '🐾', face: 'normal', pose: 'sit' },
         { id: 'sleep',  label: 'おひるね',       icon: '💤', face: 'sleep',  pose: 'sleep' },
+        { id: 'bow',    label: 'ぺこっ',         icon: '🌿', face: 'sleep',  pose: 'bow' },
+        { id: 'prone',  label: 'ぺたん',         icon: '🐾', face: 'normal', pose: 'prone', form: true },
+        { id: 'roll',   label: 'ごろん',         icon: '☁️', face: 'normal', pose: 'roll', form: true },
+        { id: 'mochi',  label: 'もちもち',       icon: '🍡', face: 'normal', pose: 'mochi', form: true },
       ];
       const GONYANI_EMOTES = [
         { id: 'normal', label: '通常',           icon: '🐱', face: 'gonyani-normal', pose: 'idle',   key: '1' },
@@ -842,11 +891,14 @@
         { id: 'wary',   label: 'マジンガー耳',   icon: '⚡', face: 'gonyani-wary',   pose: 'wary',   key: '3' },
         { id: 'sit',    label: 'おすわり',       icon: '🐾', face: 'gonyani-stare',  pose: 'sit',    key: '4' },
         { id: 'sleep',  label: 'おひるね',       icon: '💤', face: 'gonyani-sleep',  pose: 'sleep',  key: '5' },
+        { id: 'loaf',   label: '香箱座り',       icon: '🐾', face: 'gonyani-normal', pose: 'loaf', form: true },
+        { id: 'stretch', label: 'のびー',       icon: '↔️', face: 'gonyani-normal', pose: 'stretch', form: true },
       ];
       const CHARACTERS = {
         ganadi: { id: 'ganadi', label: 'ガナディ', emotes: GANADI_EMOTES },
         gonyani: { id: 'gonyani', label: 'ゴニャニ', emotes: GONYANI_EMOTES },
       };
+      const FLOOR_POSES = new Set(['prone', 'roll', 'sleep', 'loaf', 'stretch']);
 
       // =======================================================================
       // 2. 面の向きに応じた明暗
@@ -1770,9 +1822,25 @@
         };
 
         const head = createLowPolyLathe(HEAD_RINGS, HEAD_PROFILE, HEAD_RX, HEAD_RZ);
+        // LINE第1弾の、おもちが重なったようなシルエット。
+        const mochiRings = [
+          { y: .25, sx: .64, sz: .63, xOff: -.3 },
+          { y: 1.65, sx: .93, sz: .94, xOff: -.45 },
+          { y: 3.60, sx: 1, sz: 1, xOff: -.55 },
+          { y: 5.46, sx: .87, sz: .89, xOff: -.49 },
+          { y: 6.06, sx: .77, sz: .82, xOff: -.12 },
+          { y: 7.52, sx: .90, sz: .90, xOff: .42 },
+          { y: 9.37, sx: .88, sz: .92, xOff: .46 },
+          { y: 11, sx: .69, sz: .76, xOff: .17 },
+          { y: 11.63, sx: .65, sz: .67, xOff: -.22 },
+          { y: 13.15, sx: .76, sz: .76, xOff: -.46 },
+          { y: 15.10, sx: .70, sz: .72, xOff: -.41 },
+          { y: 18.1, sx: .47, sz: .53, xOff: -.23 },
+        ];
         const lowGeos = {
           head,
           facePatch: createLowPolyFacePatchGeometry(head),
+          torsoMochi: createLowPolyLathe(mochiRings, ROUND_RING, 15.2, 10.4),
           // 写真の耳は横に広く、先端だけが丸く下へ折れる。
           earL: createLowPolyLathe([
             { y: -4.30, sx: .30, sz: .35, xOff: .28, zOff: 1.23 },
@@ -1854,6 +1922,7 @@
         // ---- B. SMOOTH SUPERELLIPSOID GEOMETRIES (FOR 1-TAP COMPARISON) ----
         const smoothGeos = {
           tailSingle: lowGeos.tailSingle,
+          torsoMochi: createLowPolyLathe(mochiRings, HEAD_PROFILE, 15.2, 10.4, false),
           head: createSuperellipsoidGeometry(HEAD_RX, HEAD_RY, HEAD_RZ, HEAD_P, {
             lonSegs: 28, latSegs: 20, cheekBulge: true,
           }),
@@ -2112,6 +2181,19 @@
             this.qLegs.push(pv);
           });
 
+          if (!this.isGonyani) {
+            this.mochiMesh = makePart('Mochi_Torso', 'torsoMochi', 'torsoMochi', mats.fur);
+            this.mochiMesh.visible = false;
+            this.bodyGroup.add(this.mochiMesh);
+            for (const side of [-1, 1]) {
+              const paw = makePart(side < 0 ? 'Mochi_Paw_L' : 'Mochi_Paw_R', 'arm', 'arm', mats.fur);
+              paw.scale.set(.72, .54, .64);
+              paw.position.set(side * .227, .733, .384);
+              paw.rotation.z = side * .87;
+              this.mochiMesh.add(paw);
+            }
+          }
+
           // ---- CURLED FLUFFY TAIL (1-piece low-poly vs 3-puff smooth) ----
           this.tailPivot = new THREE.Group();
           this.tailPivot.position.set(0.3 * S, 8.0 * S, -7.9 * S);
@@ -2259,6 +2341,10 @@
           this.quadBlend = 0;
           this.sprinting = false;
           this.activeEmote = 'normal';
+          this.emoteAge = 0;
+          this.petFor = 0;
+          this.floorPose = false;
+          this.renderPose = 'idle';
           this.animPhase = Math.random() * 10;
 
           // Autonomous AI state (for spawned crowd Ganadis)
@@ -2292,11 +2378,13 @@
         }
 
         getTriangleCount() {
-          const body = this.quadMode ? this.quadGroup : this.bipedGroup;
-          const otherBody = this.quadMode ? this.bipedGroup : this.quadGroup;
+          const pose = this.renderPose;
+          const body = pose === 'mochi' ? this.mochiMesh
+            : (this.quadMode || FLOOR_POSES.has(pose) ? this.quadGroup : this.bipedGroup);
           let tris = 0;
           const countTree = (obj) => {
-            if (obj === otherBody || (!obj.visible && obj !== body)) return;
+            if (obj === this.tailPivot && pose === 'mochi') return;
+            if (obj !== body && (!obj.visible || obj === this.bipedGroup || obj === this.quadGroup || obj === this.mochiMesh)) return;
             if (obj.isMesh && !obj.userData.isWireframe && obj.geometry) {
               const g = obj.geometry;
               tris += g.index ? (g.index.count / 3) : (g.attributes.position.count / 3);
@@ -2326,6 +2414,7 @@
         setEmote(emoteId) {
           const em = this.emotes.find((emote) => emote.id === emoteId) || this.emotes[0];
           this.activeEmote = em.id;
+          this.emoteAge = 0;
           this.setFace(em.face);
           this.setProp(em.prop);
         }
@@ -2349,14 +2438,6 @@
           const qb = this.quadBlend;
           this.sprinting = sprinting;
 
-          // Smoothly cross-fade between Bipedal and Quadruped body groups
-          this.bipedGroup.visible = qb < 0.96;
-          this.quadGroup.visible = qb > 0.04;
-          const bScale = Math.max(0.001, 1.0 - qb);
-          const qScale = Math.max(0.001, qb);
-          this.bipedGroup.scale.set(bScale, bScale, bScale);
-          this.quadGroup.scale.set(qScale, qScale, qScale);
-
           const moving = speed > 0.25;
           const rate = moving ? (sprinting ? 14.5 : 9.8) : 3.4;
           this.animPhase += dt * rate;
@@ -2366,6 +2447,21 @@
 
           const em = this.emotes.find((emote) => emote.id === this.activeEmote) || this.emotes[0];
           const pose = moving ? (sprinting ? 'run' : 'walk') : (!this.onGround ? 'jump' : em.pose);
+          const floorPose = FLOOR_POSES.has(pose);
+          const mochi = pose === 'mochi';
+          const changedForm = floorPose !== this.floorPose || mochi !== (this.renderPose === 'mochi')
+            || (floorPose && this.isGonyani && pose !== this.renderPose);
+          this.renderPose = pose;
+          this.floorPose = floorPose;
+          this.emoteAge += dt;
+          this.petFor = Math.max(0, this.petFor - dt);
+
+          // 歩行リグの切り替えとは独立して、休んでいる姿勢では胴体を置き直す。
+          this.bipedGroup.visible = !floorPose && !mochi && qb < .96;
+          this.quadGroup.visible = !mochi && (floorPose || qb > .04);
+          this.bipedGroup.scale.setScalar(Math.max(.001, 1 - qb));
+          this.quadGroup.scale.setScalar(floorPose ? 1 : Math.max(.001, qb));
+          if (this.mochiMesh) this.mochiMesh.visible = mochi;
 
           // Automatic expression override while sprinting/jumping (respecting active emote when idle)
           if (this.isGonyani) {
@@ -2519,15 +2615,27 @@
             armLZ = -0.25; armRZ = 0.25;
             footLP = -1.32; footRP = -1.32;
             tailWag = Math.sin(t * 1.6) * 0.34;
-          } else if (pose === 'sleep') {
-            bodyY = -1.7 * S;
-            bodyPitch = 0.10;
-            headPitch = 0.22 + Math.sin(t * 0.7) * 0.05;
-            headRoll = 0.16;
-            armLP = -0.25; armRP = -0.25;
-            footLP = -1.32; footRP = -1.32;
-            earLFlap = -0.14; earRFlap = -0.14;
-            tailWag = Math.sin(t * 0.7) * 0.08;
+          } else if (pose === 'bow') {
+            const dip = Math.sin(Math.PI * clamp(this.emoteAge / .86, 0, 1));
+            bodyY = -.06 * dip;
+            headPitch = .36 * dip;
+            armLZ = -1.05 * dip; armRZ = 1.05 * dip;
+            earLFlap = .2 * dip; earRFlap = .2 * dip;
+            if (this.emoteAge > .86) this.setFace('normal');
+          } else if (mochi) {
+            headRoll = -.11 + Math.sin(t * .78) * .04;
+            tailWag = 0;
+            this.mochiMesh.scale.set(1, 1 + Math.sin(t * .76) * .028, 1);
+          }
+
+          if (this.petFor > 0 && !moving && this.onGround) {
+            const twitch = Math.sin(clamp((1.4 - this.petFor) / .52, 0, 1) * Math.PI);
+            headRoll += (this.isGonyani ? -.16 : .16) * twitch;
+            if (!floorPose) bodyY += (this.isGonyani ? .025 : .095) * twitch;
+            earLFlap += (this.isGonyani ? -.34 : .15) * twitch;
+            earRFlap += (this.isGonyani ? -.34 : .32) * twitch;
+            tailWag += Math.sin(t * 2.75) * .24;
+            this.setFace(this.isGonyani ? 'gonyani-stare' : 'happy');
           }
 
           // Apply Body transforms
@@ -2546,6 +2654,15 @@
           this.qLegs[1].rotation.x = -qStride;
           this.qLegs[2].rotation.x = -qStride;
           this.qLegs[3].rotation.x =  qStride;
+          this.qLegs.forEach((leg) => {
+            leg.visible = true;
+            leg.position.y = 6.2 * S;
+            leg.rotation.z = 0;
+          });
+          this.quadGroup.rotation.z = 0;
+          this.quadGroup.position.y = 0;
+          this.quadTorso.position.y = 10.6 * S;
+          this.quadTorso.scale.setScalar(1);
 
           // Smoothly position Head, Tail, and Wings between Biped & Quadruped modes
           this.headPivot.position.set(
@@ -2554,6 +2671,7 @@
             THREE.MathUtils.lerp(0.0, 9.2, qb) * S
           );
           this.headPivot.rotation.set(headPitch, headYaw, headRoll);
+          this.headPivot.scale.set(1, 1, 1);
 
           this.tailPivot.position.set(
             0.3 * S,
@@ -2561,7 +2679,14 @@
             THREE.MathUtils.lerp(this.isGonyani ? -5.6 : -7.9, -11.4, qb) * S
           );
           this.tailPivot.rotation.set(tailPitch, tailWag, 0);
+          this.tailPivot.visible = !mochi;
           if (this.isGonyani) this.tailPivot.scale.setScalar(pose === 'wary' ? 1.34 : 1);
+          if (floorPose) {
+            this.applyFloorPose(pose, t);
+          } else if (mochi) {
+            this.headPivot.position.set(-.035, .765, .061);
+            this.headPivot.scale.set(.83, .77, .92);
+          }
 
           this.angelWingsGroup.position.set(
             0,
@@ -2594,15 +2719,47 @@
           // Update Soft Elliptical Ground Shadow Disc directly under Ganadi
           const hFactor = clamp(1.0 - this.pos.y * 0.14, 0.42, 1.0);
           const rxSh = THREE.MathUtils.lerp(0.68, 0.74, qb) * hFactor;
-          const rzSh = THREE.MathUtils.lerp(0.60, 0.96, qb) * hFactor;
+          const rzSh = (floorPose ? 1.05 : THREE.MathUtils.lerp(.60, .96, qb)) * hFactor;
           this.shadowMesh.position.set(this.pos.x, 0.025, this.pos.z);
           this.shadowMesh.rotation.y = this.yaw;
           this.shadowMesh.scale.set(rxSh, 1, rzSh);
           this.shadowMat.color.setHex(isStudioMode ? 0x8ea4c2 : 0x5c8e66);
           this.shadowMat.opacity = (isStudioMode ? 0.22 : 0.28) * hFactor;
+          return changedForm;
+        }
+
+        applyFloorPose(pose, time) {
+          const sideways = pose === 'roll' || (pose === 'sleep' && !this.isGonyani);
+          const tucked = pose === 'loaf' || (pose === 'sleep' && this.isGonyani);
+          const stretch = pose === 'stretch';
+          const breathe = Math.sin(time * .65) * .022;
+
+          this.quadGroup.position.y = sideways ? .20 : -.17;
+          this.quadGroup.rotation.z = sideways ? .96 : 0;
+          this.quadTorso.position.y = sideways ? .365 : .43;
+          this.quadTorso.scale.set(tucked ? 1.13 : 1.05, .72 + breathe, stretch ? 1.46 : 1.19);
+          this.qLegs.forEach((leg, index) => {
+            leg.visible = !tucked;
+            leg.rotation.x = index < 2 ? (sideways ? -1.0 : -1.5) : (sideways ? .55 : 1.16);
+            leg.rotation.z = sideways ? -.26 : (index % 2 ? .24 : -.24);
+            if (sideways && index % 2 === 0) leg.position.y += index === 0 ? .073 : .168;
+            if (!sideways && index >= 2) leg.position.y += .075;
+          });
+
+          const headRoll = this.headPivot.rotation.z;
+          this.headPivot.position.set(sideways ? .05 : 0, (sideways ? .455 : .137) + breathe, stretch ? .82 : .56);
+          this.headPivot.rotation.set(.07 + breathe, sideways ? .30 : .41, (sideways ? .99 : (tucked ? -.09 : .12)) + headRoll);
+          this.tailPivot.position.set(sideways ? -.32 : .08, .24 + breathe, stretch ? -.75 : -.61);
+          this.tailPivot.rotation.x -= sideways ? .30 : .18;
+          if (tucked) this.tailPivot.rotation.y = 1.07 + breathe;
         }
 
         getHeadTopWorldPos(target) {
+          if (this.floorPose || this.mochiMesh?.visible) {
+            this.headMesh.getWorldPosition(target);
+            target.y += .79;
+            return target;
+          }
           const headOffset = this.isGonyani ? 3 : 0;
           const topY = (THREE.MathUtils.lerp(50.5, 42.5, this.quadBlend) - headOffset) * S;
           target.set(this.pos.x, this.pos.y + topY, this.pos.z);
@@ -3212,6 +3369,7 @@
             pitchDeg: 22,
             targetPitchDeg: null,
             distance: window.innerWidth < 640 ? 11.2 : 10.0,
+            studioFormZoom: null,
             autoRotate: false,
             outlineOn: false,
             showVirtualPad: null, // null uses the automatic device/layout setting
@@ -3233,6 +3391,9 @@
           const companionButton = document.getElementById('btnCompanion');
           const worldStopsEl = document.getElementById('worldStops');
           const snackActionButton = document.getElementById('btnSnackAction');
+          const sceneActionsEl = document.getElementById('sceneActions');
+          const formsButton = document.getElementById('btnForms');
+          const formMenuEl = document.getElementById('formMenu');
           const settingsDrawerEl = document.getElementById('settingsDrawer');
           const settingsButtonEl = document.getElementById('btnOpenSettings');
           const drawerBackdropEl = document.getElementById('drawerBackdrop');
@@ -3284,6 +3445,7 @@
             const padEnabled = appState.showVirtualPad ?? (isTouchDevice || isCompactViewport());
             const shouldShow = appState.mode === 'world' && padEnabled;
             virtualPadEl.classList.toggle('hidden', !shouldShow);
+            viewportWrap.classList.toggle('with-pad', shouldShow);
             chkVirtualPadEl.checked = padEnabled;
             if (!shouldShow) resetJoystick();
             // In studio mode (or when pad is hidden), drop mobile emote bar down cleanly
@@ -3377,11 +3539,62 @@
             const em = player.emotes.find((emote) => emote.id === emoteId);
             if (!em) return;
             player.setEmote(em.id);
+            refreshPlayerPose();
+            frameStudioForm(em.pose);
             setBubble(em.bubble, 4.2);
             if (appState.mode === 'world' && companion) queueCompanionReply(em.id);
             playSfx('emote');
             updateEmoteUI();
             updateHudTag();
+          }
+
+          function fitStudioFormZoom() {
+            const horizontalSpan = 2 * Math.tan(camera.fov * RAD / 2) * camera.aspect;
+            appState.distance = clamp(Math.max(appState.studioFormZoom, 3.18 / horizontalSpan + .35), 4, 21);
+          }
+
+          function frameStudioForm(pose) {
+            if (appState.mode !== 'studio') return;
+            const wide = FLOOR_POSES.has(pose);
+            if (wide) {
+              appState.studioFormZoom ??= appState.distance;
+              fitStudioFormZoom();
+            } else if (appState.studioFormZoom !== null) {
+              appState.distance = appState.studioFormZoom;
+              appState.studioFormZoom = null;
+            }
+            if (wide || pose === 'mochi') {
+              appState.autoRotate = false;
+              document.getElementById('chkAutoRot').checked = false;
+              appState.targetYawDeg = wide ? 62 : 26;
+              appState.targetPitchDeg = wide ? 19 : 13;
+            }
+          }
+
+          function petActor(actor) {
+            actor.petFor = 1.4;
+            const reaction = actor.isGonyani ? '…' : '♪';
+            if (actor === player) {
+              setBubble(reaction, 1.4);
+              refreshPlayerPose();
+            } else {
+              setPlazaReply('companion', reaction, 1.4);
+            }
+            playSfx('emote');
+          }
+
+          function takeScenePhoto() {
+            if (renderer.getContext().isContextLost()) {
+              showToast('写真を保存できませんでした');
+              return;
+            }
+            renderPipeline();
+            const link = document.createElement('a');
+            const now = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+            link.download = `ganadi-photo_${now}.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+            showToast('📷 写真を保存しました');
           }
 
           function setQuadMode(enabled, notify = true) {
@@ -3415,6 +3628,7 @@
             player.setStyle(appState.styleMode);
             player.setWireframe(appState.wireframeOn);
             player.updateAnimation(0, Math.hypot(player.vel.x, player.vel.z), false, appState.mode === 'studio');
+            frameStudioForm(player.renderPose);
             player.setVisible(true);
             setBubble(null);
             if (companion) createCompanion(companion.pos.clone());
@@ -3600,9 +3814,25 @@
           function buildEmoteControls() {
             emoteGrid.replaceChildren();
             mobileEmoteStrip.replaceChildren();
+            formMenuEl.replaceChildren();
+            setFormMenu(false);
             mobileEmoteBarEl.scrollLeft = 0;
             document.getElementById('emoteKeyHint').textContent = player.isGonyani ? '1–5' : '1–0';
             player.emotes.forEach((em) => {
+              if (em.form || em.id === 'normal' || em.id === 'sleep') {
+                const option = document.createElement('button');
+                option.type = 'button';
+                option.dataset.emote = em.id;
+                option.className = 'form-option character-btn rounded-xl px-2.5 py-1 text-xs font-extrabold';
+                option.textContent = `${em.icon} ${em.label}`;
+                option.addEventListener('click', () => {
+                  triggerEmote(em.id);
+                  setFormMenu(false);
+                  formsButton.focus({ preventScroll: true });
+                });
+                formMenuEl.appendChild(option);
+              }
+              if (em.form) return;
               const btn = document.createElement('button');
               btn.dataset.emote = em.id;
               btn.className = 'emote-btn pixel-btn bg-white hover:bg-pink-50 rounded-xl px-2 py-1.5 text-[11px] font-extrabold flex items-center justify-between gap-1 text-left';
@@ -3633,6 +3863,16 @@
             document.querySelectorAll('.emote-pill').forEach((pill) => {
               pill.classList.toggle('active', pill.dataset.emote === player.activeEmote);
             });
+            formMenuEl.querySelectorAll('button').forEach((option) => {
+              const active = option.dataset.emote === player.activeEmote;
+              option.classList.toggle('active', active);
+              option.setAttribute('aria-pressed', String(active));
+            });
+          }
+
+          function setFormMenu(open) {
+            formMenuEl.classList.toggle('hidden', !open);
+            formsButton.setAttribute('aria-expanded', String(open));
           }
           buildEmoteControls();
 
@@ -3640,6 +3880,7 @@
             appState.mode = mode;
             appState.targetYawDeg = null;
             appState.targetPitchDeg = null;
+            appState.studioFormZoom = null;
             releaseHeldControls();
             plazaState.focus = null;
             plazaState.attention = 0;
@@ -3648,6 +3889,7 @@
             companion?.setEmote('normal');
             setBubble(null);
             setPlazaReply(null);
+            setFormMenu(false);
             const isWorld = mode === 'world';
             viewportWrap.classList.toggle('world-mode', isWorld);
             worldMeadowGroup.visible = isWorld;
@@ -3668,6 +3910,8 @@
               appState.distance = isPortrait ? 7.6 : 6.2;
               appState.pitchDeg = 12;
               appState.yawDeg = 28;
+              refreshPlayerPose();
+              frameStudioForm(player.renderPose);
             } else {
               skyUniforms.uTop.value.set('#9cd7ff');
               skyUniforms.uBottom.value.set('#e8f7ff');
@@ -3729,6 +3973,12 @@
           document.getElementById('btnVisitBench').addEventListener('click', () => visitPlazaSpot('bench'));
           document.getElementById('btnVisitSnack').addEventListener('click', () => visitPlazaSpot('snack'));
           snackActionButton.addEventListener('click', serveSnack);
+          formsButton.addEventListener('click', () => setFormMenu(formMenuEl.classList.contains('hidden')));
+          document.getElementById('btnPet').addEventListener('click', () => petActor(player));
+          document.getElementById('btnScenePhoto').addEventListener('click', takeScenePhoto);
+          document.addEventListener('pointerdown', (e) => {
+            if (!sceneActionsEl.contains(e.target)) setFormMenu(false);
+          });
           document.getElementById('btnStyleBiped').addEventListener('click', () => setQuadMode(false));
           document.getElementById('btnStyleQuad').addEventListener('click', () => setQuadMode(true));
 
@@ -3747,6 +3997,7 @@
             appState.yawDeg = 35;
             appState.pitchDeg = appState.mode === 'world' ? 22 : 16;
             appState.distance = appState.mode === 'world' ? (isPortrait ? 11.2 : 10.0) : (isPortrait ? 7.6 : 6.2);
+            appState.studioFormZoom = null;
             appState.targetYawDeg = null;
             appState.targetPitchDeg = null;
             plazaState.focus = null;
@@ -3754,6 +4005,10 @@
             player.vel.set(0, 0, 0);
             player.yaw = 0;
             player.onGround = true;
+            if (appState.mode === 'studio') {
+              refreshPlayerPose();
+              frameStudioForm(player.renderPose);
+            }
             ballState.pos.set(2.8, ballState.radius, 2.0);
             ballState.vel.set(0, 0, 0);
             syncCameraSliders(true);
@@ -3807,11 +4062,15 @@
             });
           });
 
+          function refreshPlayerPose() {
+            const studio = appState.mode === 'studio';
+            const speed = studio ? 0 : Math.hypot(player.vel.x, player.vel.z);
+            player.updateAnimation(0, speed, player.sprinting, studio);
+          }
+
           function finishPlayerWalkTransition() {
-            const target = Number(player.quadMode);
-            if (player.quadBlend === target) return;
-            player.quadBlend = target;
-            player.updateAnimation(0, Math.hypot(player.vel.x, player.vel.z), player.sprinting, appState.mode === 'studio');
+            player.quadBlend = Number(player.quadMode);
+            refreshPlayerPose();
           }
 
           // 現在の解像度で透過PNGを保存
@@ -4291,6 +4550,13 @@
               return;
             }
             if (e.repeat) return;
+            if (e.key === 'Escape' && !formMenuEl.classList.contains('hidden')) {
+              setFormMenu(false);
+              formsButton.focus({ preventScroll: true });
+              return;
+            }
+            if (e.code === 'KeyF') { petActor(player); return; }
+            if (e.code === 'KeyP') { takeScenePhoto(); return; }
             if (e.code === 'KeyE' && appState.mode === 'world') { serveSnack(); return; }
             if (e.code === 'KeyQ') { setQuadMode(!player.quadMode); return; }
             const emote = player.emotes.find((em) => em.key && em.key === e.key);
@@ -4307,11 +4573,45 @@
             return Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
           }
 
+          const tapRaycaster = new THREE.Raycaster();
+          const tapNdc = new THREE.Vector2();
+          function petAtPoint(clientX, clientY) {
+            const rect = canvas.getBoundingClientRect();
+            const x = (clientX - rect.left) / rect.width;
+            const y = (clientY - rect.top) / rect.height;
+            if (x < 0 || x > 1 || y < 0 || y > 1) return;
+            tapNdc.set(x * 2 - 1, 1 - y * 2);
+            tapRaycaster.setFromCamera(tapNdc, camera);
+
+            const actors = companion?.root.visible ? [player, companion] : [player];
+            const owners = new Map();
+            actors.forEach((actor) => {
+              actor.root.traverseVisible((node) => {
+                if (node.isMesh && !node.userData.isWireframe) owners.set(node, actor);
+              });
+            });
+            const [hit] = tapRaycaster.intersectObjects([...owners.keys()]);
+            if (!hit) return;
+            if (appState.mode === 'world') {
+              const scenery = [];
+              [treeOccluders, worldPropsGroup].forEach((group) => group.traverseVisible((node) => {
+                if (node.isMesh) scenery.push(node);
+              }));
+              const [obstruction] = tapRaycaster.intersectObjects(scenery);
+              if (obstruction && obstruction.distance < hit.distance - .02) return;
+            }
+            petActor(owners.get(hit.object));
+          }
+
           canvas.addEventListener('pointerdown', (e) => {
             e.preventDefault();
-            appState.canvasPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+            const tap = e.button === 0 && appState.canvasPointers.size === 0;
+            appState.canvasPointers.set(e.pointerId, {
+              x: e.clientX, y: e.clientY, startX: e.clientX, startY: e.clientY, at: e.timeStamp, tap,
+            });
             try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
             if (appState.canvasPointers.size === 2) {
+              appState.canvasPointers.forEach((pointer) => { pointer.tap = false; });
               appState.pinchStartDist = getTwoPointerDist();
               appState.pinchStartZoom = appState.distance;
             }
@@ -4328,6 +4628,8 @@
             prev.y = e.clientY;
 
             if (appState.canvasPointers.size === 1) {
+              if (prev.tap && Math.hypot(e.clientX - prev.startX, e.clientY - prev.startY) < 7) return;
+              prev.tap = false;
               // 1-finger drag: smooth 360° yaw orbit + pitch tilt
               appState.autoRotate = false;
               document.getElementById('chkAutoRot').checked = false;
@@ -4346,7 +4648,13 @@
           });
 
           const endCanvasPtr = (e) => {
-            if (!appState.canvasPointers.delete(e.pointerId)) return;
+            const pointer = appState.canvasPointers.get(e.pointerId);
+            if (!pointer) return;
+            appState.canvasPointers.delete(e.pointerId);
+            if (e.type === 'pointerup' && pointer.tap && e.timeStamp - pointer.at < 460
+              && Math.hypot(e.clientX - pointer.startX, e.clientY - pointer.startY) < 7) {
+              petAtPoint(e.clientX, e.clientY);
+            }
             if (appState.canvasPointers.size === 2) {
               appState.pinchStartDist = getTwoPointerDist();
               appState.pinchStartZoom = appState.distance;
@@ -4386,6 +4694,7 @@
             if (orientTimer) clearTimeout(orientTimer);
             orientTimer = setTimeout(() => {
               rebuildRenderTargets();
+              if (appState.studioFormZoom !== null) fitStudioFormZoom();
               syncDrawerAccess();
               syncVirtualPadVisibility();
             }, 140);
@@ -4643,7 +4952,7 @@
               player.pos.x += player.vel.x * dt;
               player.pos.z += player.vel.z * dt;
               interactWithWorld(player, dt, true);
-              player.updateAnimation(dt, Math.hypot(player.vel.x, player.vel.z), sprinting, false);
+              if (player.updateAnimation(dt, Math.hypot(player.vel.x, player.vel.z), sprinting, false)) updateHudTag();
               updatePlaza(dt, timeSec);
               updateCompanion(dt);
 
@@ -4788,8 +5097,9 @@
             }
 
             // Orbit Camera Update
+            const studioHeight = player.floorPose ? .72 : (player.renderPose === 'mochi' ? .99 : 1.15);
             const focus = isStudio
-              ? _projVec.set(0, 1.15, 0)
+              ? _projVec.set(0, studioHeight, 0)
               : (plazaState.focus?.point || _projVec.set(player.pos.x, player.pos.y + 1.15, player.pos.z));
             if (!isStudio && !plazaState.focus && companion && companion.pos.distanceTo(player.pos) < 2.7) {
               focus.x += (companion.pos.x - player.pos.x) * .34;
