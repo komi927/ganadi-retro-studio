@@ -299,6 +299,7 @@ export class StudioCharacter {
     this.activeEmote = 'normal';
     this.emoteAge = 0;
     this.petFor = 0;
+    this.cheekLean = null;
     this.floorPose = false;
     this.renderPose = 'idle';
     this.animPhase = Math.random() * 10;
@@ -336,7 +337,7 @@ export class StudioCharacter {
   getTriangleCount() {
     const pose = this.renderPose;
     const body = pose === 'mochi' ? this.mochiMesh
-      : (FLOOR_POSES.has(pose) || (this.quadMode && pose !== 'perch') ? this.quadGroup : this.bipedGroup);
+      : (FLOOR_POSES.has(pose) || (this.quadMode && pose !== 'perch' && pose !== 'cheek') ? this.quadGroup : this.bipedGroup);
     let tris = 0;
     const countTree = (obj) => {
       if (obj === this.tailPivot && pose === 'mochi') return;
@@ -388,7 +389,8 @@ export class StudioCharacter {
   }
 
   updateAnimation(dt, speed, sprinting, isStudioMode, perched = false) {
-    const qTarget = this.quadMode && !perched ? 1 : 0;
+    const paired = this.cheekLean !== null;
+    const qTarget = this.quadMode && !perched && !paired ? 1 : 0;
     this.quadBlend += (qTarget - this.quadBlend) * (perched ? 1 : Math.min(1, dt * 11));
     if (Math.abs(qTarget - this.quadBlend) < .002) this.quadBlend = qTarget;
     const qb = this.quadBlend;
@@ -404,13 +406,14 @@ export class StudioCharacter {
     const em = this.emotes.find((emote) => emote.id === this.activeEmote) || this.emotes[0];
     let pose = em.pose;
     if (perched) pose = 'perch';
+    else if (paired) pose = 'cheek';
     else if (moving) pose = sprinting ? 'run' : 'walk';
     else if (!this.onGround) pose = 'jump';
     const floorPose = FLOOR_POSES.has(pose);
     const mochi = pose === 'mochi';
     const changedForm = floorPose !== this.floorPose || mochi !== (this.renderPose === 'mochi')
       || (floorPose && this.isGonyani && pose !== this.renderPose)
-      || perched !== (this.renderPose === 'perch');
+      || perched !== (this.renderPose === 'perch') || paired !== (this.renderPose === 'cheek');
     this.renderPose = pose;
     this.floorPose = floorPose;
     this.emoteAge += dt;
@@ -452,6 +455,15 @@ export class StudioCharacter {
     } else if (pose === 'stare') {
       headYaw = .14;
       tailWag = Math.sin(t * .7) * .08;
+    } else if (pose === 'cheek') {
+      const { side, amount } = this.cheekLean;
+      const lean = side * amount;
+      bodyRoll = (this.isGonyani ? -.065 : -.13) * lean;
+      headRoll = (this.isGonyani ? -.20 : -.10) * lean;
+      headYaw = (this.isGonyani ? -.32 : .29) * lean;
+      headPitch = -.045 * amount;
+      tailWag = Math.sin(t * 1.15) * (this.isGonyani ? .07 : .29);
+      if (this.isGonyani) this.setFace('gonyani-stare');
     } else if (pose === 'wary') {
       bodyY = -.65 * S;
       bodyPitch = .14;

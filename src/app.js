@@ -3,11 +3,12 @@ import { MAX_CAMERA_DISTANCE, RAD, WORLD_HALF, clamp } from './math.js?v=2';
 import { playSfx, toggleAudio } from './audio.js';
 import { CHARACTERS, FLOOR_POSES } from './characters/design.js';
 import { buildSharedAssets, buildGonyaniAssets } from './characters/assets.js';
-import { StudioCharacter } from './characters/character.js?v=2';
+import { StudioCharacter } from './characters/character.js?v=3';
 import { globalRenderUniforms } from './graphics/materials.js';
 import { createRenderPipeline } from './graphics/renderer.js';
 import { createWorld } from './world/scene.js?v=2';
 import { BENCH_REACH, createBenchClimb } from './world/bench-climb.js?v=2';
+import { createCheekNuzzle } from './world/cheek-nuzzle.js?v=3';
 import { createWorldInteractions, movePlayer, updateCrowd } from './world/physics.js';
 import { createTransparentPng } from './export/png.js';
 import { buildCharacterGlb } from './export/glb.js';
@@ -25,6 +26,7 @@ function initApp() {
   const world = createWorld(worldScene, charScene, assets.mats);
   const { worldPropsGroup, treeOccluders, plaza, ballState, spawnRiceSparkles } = world;
   const benchClimb = createBenchClimb(plaza);
+  const cheekNuzzle = createCheekNuzzle();
 
   // ---- PLAYABLE CHARACTERS & AUTONOMOUS CROWD ----
   const characterAssets = { ganadi: assets, gonyani: buildGonyaniAssets(assets) };
@@ -183,7 +185,7 @@ function initApp() {
   function triggerEmote(emoteId) {
     const em = player.emotes.find((emote) => emote.id === emoteId);
     if (!em) return;
-    cancelBenchClimb();
+    cancelPlazaInteraction();
     player.setEmote(em.id);
     refreshPlayerPose();
     frameStudioForm(em.pose);
@@ -218,6 +220,7 @@ function initApp() {
   }
 
   function petActor(actor) {
+    cancelCheekNuzzle();
     actor.petFor = 1.4;
     const reaction = actor.isGonyani ? '…' : '♪';
     if (actor === player) {
@@ -262,7 +265,7 @@ function initApp() {
   function selectCharacter(id) {
     const next = players[id];
     if (!next || next === player) return;
-    cancelBenchClimb();
+    cancelPlazaInteraction();
     next.pos.copy(player.pos);
     next.vel.copy(player.vel);
     next.yaw = player.yaw;
@@ -292,6 +295,7 @@ function initApp() {
       benchClimb.dismount();
       return;
     }
+    cancelCheekNuzzle();
     if (player.onGround) {
       player.vel.y = 7.8;
       player.onGround = false;
@@ -314,6 +318,7 @@ function initApp() {
 
   function dismissCompanion() {
     if (!companion) return;
+    cancelCheekNuzzle();
     if (benchClimb.hasRider(companion)) cancelBenchClimb();
     companion.dispose(worldScene, charScene);
     companion = null;
@@ -350,7 +355,7 @@ function initApp() {
 
   function visitPlazaSpot(spot) {
     if (appState.mode !== 'world') return;
-    cancelBenchClimb();
+    cancelPlazaInteraction();
     releaseHeldControls();
     const bench = spot === 'bench';
     const place = bench ? plaza.bench.position : plaza.snackTable.position;
@@ -428,6 +433,43 @@ function initApp() {
     updateEmoteUI();
   }
 
+  function startCheekNuzzle() {
+    releaseHeldControls();
+    setBubble(null);
+    setPlazaReply(null);
+    if (companionBeat || plazaState.servingFor > 0) companion.setEmote('normal');
+    companionBeat = null;
+    const { yaw, center } = cheekNuzzle.start(player, companion, appState.yawDeg * RAD);
+    plazaState.focus = {
+      point: center, companion: companion.pos.clone(), width: 4.05, height: 2.75, centerY: 1.14,
+    };
+    framePlazaFocus();
+    appState.targetYawDeg = (yaw / RAD + 360) % 360;
+    appState.targetPitchDeg = 12;
+    appState.autoRotate = false;
+    document.getElementById('chkAutoRot').checked = false;
+    updateEmoteUI();
+    playSfx('emote');
+  }
+
+  function finishCheekNuzzle() {
+    plazaState.focus = null;
+    if (player.isGonyani) setBubble(null);
+    else if (plazaReply?.speaker === 'companion') setPlazaReply(null);
+    updateEmoteUI();
+  }
+
+  function cancelCheekNuzzle() {
+    if (!cheekNuzzle.active) return;
+    cheekNuzzle.cancel();
+    finishCheekNuzzle();
+  }
+
+  function cancelPlazaInteraction() {
+    cancelBenchClimb();
+    cancelCheekNuzzle();
+  }
+
   function setSnackStage(stage) {
     plazaState.snack = stage;
     plaza.center.topping.visible = stage >= 1;
@@ -436,7 +478,7 @@ function initApp() {
   }
 
   function getPlazaAction() {
-    if (appState.mode !== 'world') return null;
+    if (appState.mode !== 'world' || cheekNuzzle.active) return null;
     if (benchClimb.active) return benchClimb.seated ? 'dismount' : null;
     const table = plaza.snackTable.position;
     const snackDistance = Math.hypot(player.pos.x - table.x, player.pos.z - table.z);
@@ -444,12 +486,16 @@ function initApp() {
     const withCompanion = companion?.onGround && benchClimb.distanceToResident(companion) <= BENCH_REACH + 1.2;
     if ((!player.isGonyani || withCompanion) && player.onGround && benchDistance <= BENCH_REACH
       && (snackDistance > 1.95 || benchDistance < snackDistance)) return withCompanion ? 'climbTogether' : 'climb';
-    return snackDistance <= 1.95 ? 'snack' : null;
+    if (snackDistance <= 1.95) return 'snack';
+    return cheekNuzzle.canStart(player, companion) ? 'cheek' : null;
   }
 
   function syncPlazaAction() {
     const action = getPlazaAction();
-    const labels = { climb: 'のぼる', climbTogether: 'ふたりでのぼる', dismount: 'おりる', snack: snackActions[plazaState.snack] };
+    const labels = {
+      climb: 'のぼる', climbTogether: 'ふたりでのぼる', dismount: 'おりる',
+      snack: snackActions[plazaState.snack], cheek: 'ほっぺを寄せる',
+    };
     const label = labels[action] || '';
     plazaActionButton.classList.toggle('hidden', !action);
     if (plazaActionButton.textContent !== label) plazaActionButton.textContent = label;
@@ -460,6 +506,7 @@ function initApp() {
     if (action === 'climb' || action === 'climbTogether') startBenchClimb(action === 'climbTogether');
     else if (action === 'dismount') benchClimb.dismount();
     else if (action === 'snack') serveSnack();
+    else if (action === 'cheek') startCheekNuzzle();
     syncPlazaAction();
   }
 
@@ -592,7 +639,7 @@ function initApp() {
   buildEmoteControls();
 
   function switchMode(mode) {
-    cancelBenchClimb();
+    cancelPlazaInteraction();
     appState.mode = mode;
     appState.targetYawDeg = null;
     appState.targetPitchDeg = null;
@@ -692,7 +739,7 @@ function initApp() {
   document.getElementById('btnSoundDrawer').addEventListener('click', toggleSound);
 
   document.getElementById('btnReset').addEventListener('click', () => {
-    cancelBenchClimb();
+    cancelPlazaInteraction();
     const isPortrait = graphics.width < graphics.height;
     appState.yawDeg = 35;
     appState.pitchDeg = appState.mode === 'world' ? 22 : 16;
@@ -769,7 +816,7 @@ function initApp() {
   }
 
   function finishPlayerWalkTransition() {
-    player.quadBlend = Number(player.quadMode && !benchClimb.isSeated(player));
+    player.quadBlend = Number(player.quadMode && !benchClimb.isSeated(player) && !cheekNuzzle.active);
     refreshPlayerPose();
   }
 
@@ -897,7 +944,7 @@ function initApp() {
     plaza.head.rotation.x += ((lookingUp ? -.045 + nod - .12 * reaction : .22) - plaza.head.rotation.x) * follow;
     plaza.head.rotation.z += (-.07 * reaction - plaza.head.rotation.z) * follow;
     plaza.phone.rotation.x += ((lookingUp ? -1.36 - .15 * reaction : -1.1) - plaza.phone.rotation.x) * follow;
-    if (!benchClimb.active && oldAttention < .65 && plazaState.attention >= .65 && !plazaReply) {
+    if (!benchClimb.active && !cheekNuzzle.active && oldAttention < .65 && plazaState.attention >= .65 && !plazaReply) {
       setPlazaReply('resident', '…', 1.7);
     }
     if (plazaState.servingFor > 0) {
@@ -911,6 +958,10 @@ function initApp() {
     if (!companion) return;
     if (benchClimb.hasRider(companion)) {
       companion.updateAnimation(dt, 0, false, false, benchClimb.isSeated(companion));
+      return;
+    }
+    if (cheekNuzzle.active) {
+      companion.updateAnimation(dt, 0, false, false);
       return;
     }
     const dx = player.pos.x - companion.pos.x;
@@ -1005,7 +1056,8 @@ function initApp() {
 
     if (!isStudio) {
       const climbing = benchClimb.active;
-      const { moving, sprinting } = movePlayer(player, appState, climbing ? 0 : dt);
+      const nuzzling = cheekNuzzle.active;
+      const { moving, sprinting } = movePlayer(player, appState, climbing || nuzzling ? 0 : dt);
       if (climbing) {
         if (moving) benchClimb.dismount();
         benchClimb.update(dt);
@@ -1013,7 +1065,14 @@ function initApp() {
           plazaState.focus = null;
           updateEmoteUI();
         }
+      } else if (nuzzling && !moving) {
+        if (cheekNuzzle.update(dt)) {
+          if (player.isGonyani) setBubble('…', 1.25);
+          else setPlazaReply('companion', '…', 1.25);
+        }
+        if (!cheekNuzzle.active) finishCheekNuzzle();
       } else {
+        if (nuzzling) cancelCheekNuzzle();
         if (moving) plazaState.focus = null;
         interactWithWorld(player, dt, true);
       }
