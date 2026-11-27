@@ -186,17 +186,17 @@ body {
   width: 100%;
   text-align: left;
 }
-#btnSnackAction {
+#btnPlazaAction {
   position: absolute;
   bottom: calc(100% + 9px);
   left: 50%;
   transform: translateX(-50%);
   background: #ffd166;
 }
-#mobileEmoteBar:not([hidden]) + #sceneActions #btnSnackAction {
+#mobileEmoteBar:not([hidden]) + #sceneActions #btnPlazaAction {
   visibility: hidden;
 }
-#btnSnackAction:active {
+#btnPlazaAction:active {
   transform: translate(-50%, 2px);
 }
 #formMenu {

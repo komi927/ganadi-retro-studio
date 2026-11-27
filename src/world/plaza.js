@@ -27,20 +27,25 @@ export function buildPlaza(worldPropsGroup, mats) {
   }
 
   const bench = new THREE.Group();
-  bench.position.set(-1.98, 0, -3.8);
+  bench.position.set(-3.5, 0, -6.45);
   worldPropsGroup.add(bench);
+  const benchFurniture = new THREE.Group();
+  benchFurniture.scale.set(1.65, 1.2, 2);
+  bench.add(benchFurniture);
   for (const side of [-1, 1]) {
-    scaled(bench, box, wood, side * 1.04, .27, -.03, .16, .54, .73);
-    scaled(bench, box, wood, side * 1.04, .83, -.42, .14, .75, .13);
+    scaled(benchFurniture, box, wood, side * 1.04, .27, -.03, .16, .54, .73);
+    scaled(benchFurniture, box, wood, side * 1.04, .83, -.42, .14, .75, .13);
   }
-  scaled(bench, box, wood, 0, .56, 0, 2.53, .13, .92);
+  scaled(benchFurniture, box, wood, 0, .56, 0, 2.53, .13, .92);
   for (const height of [.85, 1.08]) {
-    scaled(bench, box, wood, 0, height, -.42, 2.53, .16, .12);
+    scaled(benchFurniture, box, wood, 0, height, -.42, 2.53, .16, .12);
   }
 
   // HNF資料とKakao第3弾の輪郭を立体化。白っぽい体、長い鼻先、段になった歯。
   const resident = new THREE.Group();
-  resident.position.set(-.16, .62, .04);
+  resident.position.set(0, .75, .08);
+  // HNFの集合絵では、頭の横幅はガナディの耳を含む幅のおよそ2倍。
+  resident.scale.setScalar(2.45);
   bench.add(resident);
   scaled(resident, round, dinoSkin, 0, .52, -.06, .58, .64, .52);
   for (const side of [-1, 1]) {
@@ -69,6 +74,13 @@ export function buildPlaza(worldPropsGroup, mats) {
   const head = new THREE.Group();
   head.position.set(0, 1.32, -.01);
   resident.add(head);
+  const headPerches = {};
+  for (const [name, x, y] of [['solo', 0, .655], ['ganadi', -.32, .62], ['gonyani', .32, .62]]) {
+    const perch = new THREE.Object3D();
+    perch.position.set(x, y, -.075);
+    head.add(perch);
+    headPerches[name] = perch;
+  }
   const skull = createLowPolyLathe([
     { y: -10, sx: .49, sz: .55 },
     { y: -7, sx: .75, sz: .79 },
@@ -129,6 +141,6 @@ export function buildPlaza(worldPropsGroup, mats) {
   const center = cupcake(snackTable, 0, .81, .08);
   const left = cupcake(snackTable, -.49, .81, -.14).dish;
   const right = cupcake(snackTable, .49, .81, -.14).dish;
-  const residentSnack = cupcake(bench, .88, .625, .18).dish;
-  return { bench, resident, head, phone, snackTable, center, left, right, residentSnack };
+  const residentSnack = cupcake(bench, 1.72, .75, .36).dish;
+  return { bench, resident, head, headPerches, phone, snackTable, center, left, right, residentSnack };
 }

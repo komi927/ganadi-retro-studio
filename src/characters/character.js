@@ -336,7 +336,7 @@ export class StudioCharacter {
   getTriangleCount() {
     const pose = this.renderPose;
     const body = pose === 'mochi' ? this.mochiMesh
-      : (this.quadMode || FLOOR_POSES.has(pose) ? this.quadGroup : this.bipedGroup);
+      : (FLOOR_POSES.has(pose) || (this.quadMode && pose !== 'perch') ? this.quadGroup : this.bipedGroup);
     let tris = 0;
     const countTree = (obj) => {
       if (obj === this.tailPivot && pose === 'mochi') return;
@@ -387,9 +387,9 @@ export class StudioCharacter {
     this.shadowMat.dispose();
   }
 
-  updateAnimation(dt, speed, sprinting, isStudioMode) {
-    const qTarget = this.quadMode ? 1 : 0;
-    this.quadBlend += (qTarget - this.quadBlend) * Math.min(1, dt * 11);
+  updateAnimation(dt, speed, sprinting, isStudioMode, perched = false) {
+    const qTarget = this.quadMode && !perched ? 1 : 0;
+    this.quadBlend += (qTarget - this.quadBlend) * (perched ? 1 : Math.min(1, dt * 11));
     if (Math.abs(qTarget - this.quadBlend) < .002) this.quadBlend = qTarget;
     const qb = this.quadBlend;
     this.sprinting = sprinting;
@@ -402,11 +402,15 @@ export class StudioCharacter {
     const c = Math.cos(t);
 
     const em = this.emotes.find((emote) => emote.id === this.activeEmote) || this.emotes[0];
-    const pose = moving ? (sprinting ? 'run' : 'walk') : (!this.onGround ? 'jump' : em.pose);
+    let pose = em.pose;
+    if (perched) pose = 'perch';
+    else if (moving) pose = sprinting ? 'run' : 'walk';
+    else if (!this.onGround) pose = 'jump';
     const floorPose = FLOOR_POSES.has(pose);
     const mochi = pose === 'mochi';
     const changedForm = floorPose !== this.floorPose || mochi !== (this.renderPose === 'mochi')
-      || (floorPose && this.isGonyani && pose !== this.renderPose);
+      || (floorPose && this.isGonyani && pose !== this.renderPose)
+      || perched !== (this.renderPose === 'perch');
     this.renderPose = pose;
     this.floorPose = floorPose;
     this.emoteAge += dt;
@@ -564,11 +568,12 @@ export class StudioCharacter {
       headPitch = -0.05;
       armLP = -0.75; armLZ = -0.58;
       armRP = -0.15; armRZ = 0.18;
-    } else if (pose === 'sit') {
-      bodyY = -1.6 * S;
+    } else if (pose === 'sit' || pose === 'perch') {
+      bodyY = (perched ? -3.4 : -1.6) * S;
       headRoll = -0.05;
-      armLP = -0.35; armRP = -0.35;
-      armLZ = -0.25; armRZ = 0.25;
+      armLP = armRP = perched ? -.74 : -.35;
+      armLZ = perched ? .14 : -.25;
+      armRZ = -armLZ;
       footLP = -1.32; footRP = -1.32;
       tailWag = Math.sin(t * 1.6) * 0.34;
     } else if (pose === 'bow') {

@@ -149,5 +149,9 @@ export function createMenus(viewport, { releaseInputs, onLayoutChange }) {
     if (!emoteMenu.contains(event.target) && !emoteToggle.contains(event.target)) setEmoteMenu(false);
   });
 
-  return { get clean() { return clean; }, syncLayout, setFormMenu, setWorld, handleKey };
+  return {
+    get clean() { return clean; },
+    get plazaOpen() { return !plazaMenu.hidden; },
+    syncLayout, setFormMenu, setWorld, handleKey,
+  };
 }

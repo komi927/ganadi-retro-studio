@@ -301,8 +301,10 @@ export function createWorld(worldScene, charScene, mats) {
     }
   }
 
+  const { x: benchX, z: benchZ } = plaza.bench.position;
   const obstacles = [...trees,
-    { x: plaza.bench.position.x, z: plaza.bench.position.z, r: .64 },
+    ...[-1.32, 0, 1.32].map((offset) => ({ x: benchX + offset, z: benchZ, r: .75 })),
+    { x: benchX, z: benchZ + 1.2, r: 1.1 },
     { x: plaza.snackTable.position.x, z: plaza.snackTable.position.z, r: .59 },
   ];
 

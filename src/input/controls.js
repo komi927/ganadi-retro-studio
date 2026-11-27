@@ -1,4 +1,4 @@
-import { clamp } from '../math.js';
+import { MAX_CAMERA_DISTANCE, clamp } from '../math.js';
 
 export function bindControls(canvas, appState, actions) {
   const joyZoneEl = document.getElementById('joyZone');
@@ -162,7 +162,7 @@ export function bindControls(canvas, appState, actions) {
       const curDist = getTwoPointerDist();
       if (curDist > 12 && appState.pinchStartDist > 12) {
         const scale = appState.pinchStartDist / curDist;
-        appState.distance = clamp(appState.pinchStartZoom * scale, 4.0, 21.0);
+        appState.distance = clamp(appState.pinchStartZoom * scale, 4, MAX_CAMERA_DISTANCE);
       }
     }
   });
@@ -204,7 +204,7 @@ export function bindControls(canvas, appState, actions) {
   canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
     const delta = e.deltaY > 0 ? 0.65 : -0.65;
-    appState.distance = clamp(appState.distance + delta, 4.0, 21.0);
+    appState.distance = clamp(appState.distance + delta, 4, MAX_CAMERA_DISTANCE);
   }, { passive: false });
 
   return { resetJoystick, releaseHeldControls };
