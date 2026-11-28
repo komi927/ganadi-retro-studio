@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
 
-  <link rel="stylesheet" href="./styles/app.css?v=10" />
+  <link rel="stylesheet" href="./styles/app.css?v=11" />
 </head>
 <body>
 
@@ -122,6 +122,14 @@
     <!-- Toast Notification Container -->
     <div id="toastContainer" class="absolute left-1/2 z-40 pointer-events-none"></div>
   </main>
+
+  <dialog id="benchPhotoPreview" class="pixel-card" aria-label="ゴンニョンイが撮った写真">
+    <img id="benchPhotoImage" alt="ゴンニョンイが撮影したガナディとゴニャニ" draggable="false" />
+    <form method="dialog" class="photo-preview-actions">
+      <button type="submit" class="pixel-btn rounded-xl" autofocus>閉じる</button>
+      <button id="btnSaveBenchPhoto" type="button" class="pixel-btn active rounded-xl">PNGを保存</button>
+    </form>
+  </dialog>
 
   <!-- Mobile Bottom-Sheet Backdrop -->
   <div id="drawerBackdrop"></div>
@@ -293,6 +301,6 @@
     </div>
   </aside>
 
-  <script type="module" src="./src/app.js?v=10"></script>
+  <script type="module" src="./src/app.js?v=11"></script>
 </body>
 </html>

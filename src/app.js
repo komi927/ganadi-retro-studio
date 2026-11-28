@@ -88,6 +88,8 @@ function initApp() {
   const benchPhotoButton = document.getElementById('btnBenchPhoto');
   const eveningButton = document.getElementById('btnEvening');
   const scenePhotoButton = document.getElementById('btnScenePhoto');
+  const photoPreview = document.getElementById('benchPhotoPreview');
+  const photoImage = document.getElementById('benchPhotoImage');
   // 旧版の HTML がキャッシュに残っている間も起動できるようにする。
   const plazaActionButton = document.getElementById('btnPlazaAction') || document.getElementById('btnSnackAction');
   const formsButton = document.getElementById('btnForms');
@@ -250,19 +252,40 @@ function initApp() {
     playSfx('emote');
   }
 
+  function savePhoto(prefix, data) {
+    const now = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    downloadFile(prefix + now + '.png', data);
+    showToast('📷 写真を保存しました');
+  }
+
   function takeScenePhoto() {
-    if (!residentPhoto && graphics.isContextLost()) {
+    if (residentPhoto) {
+      saveResidentPhoto();
+      return;
+    }
+    if (graphics.isContextLost()) {
       showToast('写真を保存できませんでした');
       return;
     }
-    if (!residentPhoto) renderPipeline();
-    const now = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
-    const prefix = residentPhoto ? 'ganadi-bench-photo_' : 'ganadi-photo_';
-    downloadFile(prefix + now + '.png', residentPhoto || canvas.toDataURL('image/png'));
+    renderPipeline();
+    savePhoto('ganadi-photo_', canvas.toDataURL('image/png'));
+  }
+
+  function saveResidentPhoto() {
+    if (!residentPhoto) return;
+    savePhoto('ganadi-bench-photo_', residentPhoto);
+    if (photoPreview?.open) photoPreview.close();
     residentPhoto = null;
     scenePhotoButton.textContent = '📷 写真';
     scenePhotoButton.title = '広場やスタジオを背景ごとPNGで保存';
-    showToast('📷 写真を保存しました');
+  }
+
+  function showResidentPhoto() {
+    if (!residentPhoto || !photoPreview?.showModal) return false;
+    releaseHeldControls();
+    photoImage.src = residentPhoto;
+    photoPreview.showModal();
+    return true;
   }
 
   function captureBenchPhoto() {
@@ -275,9 +298,14 @@ function initApp() {
     } finally {
       plaza.resident.visible = wasVisible;
     }
-    scenePhotoButton.textContent = '📷 保存';
-    scenePhotoButton.title = 'ゴンニョンイが撮った写真をPNGで保存';
-    showToast('📸 撮れました。「保存」でダウンロード');
+    if (showResidentPhoto()) {
+      scenePhotoButton.textContent = '📷 見る';
+      scenePhotoButton.title = 'ゴンニョンイが撮った写真を見る';
+    } else {
+      scenePhotoButton.textContent = '📷 保存';
+      scenePhotoButton.title = 'ゴンニョンイが撮った写真をPNGで保存';
+      showToast('📸 撮れました。「保存」でダウンロード');
+    }
   }
 
   function setQuadMode(enabled, notify = true) {
@@ -850,7 +878,13 @@ function initApp() {
   });
   plazaActionButton.addEventListener('click', usePlazaAction);
   document.getElementById('btnPet').addEventListener('click', () => petActor(player));
-  scenePhotoButton.addEventListener('click', takeScenePhoto);
+  scenePhotoButton.addEventListener('click', () => {
+    if (!showResidentPhoto()) takeScenePhoto();
+  });
+  document.getElementById('btnSaveBenchPhoto')?.addEventListener('click', saveResidentPhoto);
+  photoPreview?.addEventListener('close', () => {
+    if (!photoPreview.open) photoImage.removeAttribute('src');
+  });
   document.getElementById('btnStyleBiped').addEventListener('click', () => setQuadMode(false));
   document.getElementById('btnStyleQuad').addEventListener('click', () => setQuadMode(true));
 
@@ -1016,7 +1050,11 @@ function initApp() {
     },
     stopAutoRotate: () => { document.getElementById('chkAutoRot').checked = false; },
     tap: petAtPoint,
-    handleGlobalKey: menus.handleKey,
+    handleGlobalKey: (event) => {
+      if (!photoPreview?.open) return menus.handleKey(event);
+      if (event.code === 'KeyP' && !event.repeat) saveResidentPhoto();
+      return true;
+    },
     handleShortcut: (event) => {
       if (event.code === 'KeyF') { petActor(player); return; }
       if (event.code === 'KeyP') { takeScenePhoto(); return; }
