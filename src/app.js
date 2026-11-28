@@ -168,8 +168,10 @@ function initApp() {
     appState.styleMode = styleMode;
     const isSmooth = (styleMode === 'smooth');
     const isPS1 = (styleMode === 'ps1');
+    const isDot = (styleMode === 'dot');
     graphics.setRetro(isPS1);
-    document.getElementById('retroResolution').hidden = !isPS1;
+    graphics.setDot(isDot);
+    document.getElementById('retroResolution').hidden = !(isPS1 || isDot);
 
     // Update geometry across player & all crowd Ganadis
     player.setStyle(styleMode);
@@ -192,7 +194,9 @@ function initApp() {
         ? `ローポリ (${player.getTriangleCount()} tris)`
         : (styleMode === 'ps1'
           ? `🎮 PS1レトロ＋頂点スナップ (${player.getTriangleCount()} tris)`
-          : `🫧 なめらか3D (${player.getTriangleCount().toLocaleString()} tris)`);
+          : (styleMode === 'dot'
+            ? `👾 ドット絵 (${player.getTriangleCount()} tris)`
+            : `🫧 なめらか3D (${player.getTriangleCount().toLocaleString()} tris)`));
       showToast(label);
     }
   }

@@ -9,7 +9,8 @@ const faceMaterialCache = {};
  */
 export function getFaceMaterial(faceId, style) {
   const retroFace = style === 'ps1';
-  const key = retroFace ? faceId + '_ps1' : faceId;
+  const pixelFace = retroFace || style === 'dot';
+  const key = faceId + (retroFace ? '_ps1' : (style === 'dot' ? '_dot' : ''));
   if (faceMaterialCache[key]) return faceMaterialCache[key];
 
   const cvs = document.createElement('canvas');
@@ -179,9 +180,9 @@ export function getFaceMaterial(faceId, style) {
   }
 
   const tex = new THREE.CanvasTexture(cvs);
-  tex.minFilter = retroFace ? THREE.NearestFilter : THREE.LinearMipmapLinearFilter;
-  tex.magFilter = retroFace ? THREE.NearestFilter : THREE.LinearFilter;
-  tex.generateMipmaps = !retroFace;
+  tex.minFilter = pixelFace ? THREE.NearestFilter : THREE.LinearMipmapLinearFilter;
+  tex.magFilter = pixelFace ? THREE.NearestFilter : THREE.LinearFilter;
+  tex.generateMipmaps = !pixelFace;
   tex.needsUpdate = true;
 
   // 曲線の縁の透明度を保ち、PS1表示ではカットアウトにする。

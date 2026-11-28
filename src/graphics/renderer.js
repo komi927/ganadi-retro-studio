@@ -24,16 +24,20 @@ export function createRenderPipeline(viewportWrap, canvas) {
 
   let retroSize = 320;
   let retro = false;
+  let dotMode = false;
   let viewW, viewH, targetW, targetH;
   let worldRT, charRT;
   let targetRetro;
 
   function makeRenderTarget(w, h, samples) {
-    const useMSAA = !retro && renderer.capabilities.isWebGL2;
+    const useMSAA = !(retro || dotMode) && renderer.capabilities.isWebGL2;
     const Target = useMSAA ? THREE.WebGLMultisampleRenderTarget : THREE.WebGLRenderTarget;
+    // Dot style: sample the low-res targets with NearestFilter so the
+    // upscale stays crisp pixels instead of the PS1 mode's linear blur.
+    const filter = dotMode ? THREE.NearestFilter : THREE.LinearFilter;
     const target = new Target(w, h, {
-      minFilter: THREE.LinearFilter,
-      magFilter: THREE.LinearFilter,
+      minFilter: filter,
+      magFilter: filter,
       format: THREE.RGBAFormat,
       type: THREE.UnsignedByteType,
       depthBuffer: true,
@@ -95,7 +99,8 @@ export function createRenderPipeline(viewportWrap, canvas) {
   function rebuildRenderTargets() {
     viewW = Math.max(1, viewportWrap.clientWidth);
     viewH = Math.max(1, viewportWrap.clientHeight);
-    const displayRatio = retro ? 1 : Math.max(1, Math.min(
+    const lowRes = retro || dotMode;
+    const displayRatio = lowRes ? 1 : Math.max(1, Math.min(
       window.devicePixelRatio || 1, 2, Math.sqrt(2400000 / (viewW * viewH))
     ));
     if (renderer.getPixelRatio() !== displayRatio) renderer.setPixelRatio(displayRatio);
@@ -103,14 +108,16 @@ export function createRenderPipeline(viewportWrap, canvas) {
     camera.aspect = viewW / viewH;
     camera.updateProjectionMatrix();
 
-    const renderRatio = retro ? Math.min(1, retroSize / Math.min(viewW, viewH)) : displayRatio;
+    const renderRatio = lowRes ? Math.min(1, retroSize / Math.min(viewW, viewH)) : displayRatio;
     const width = Math.max(1, Math.round(viewW * renderRatio));
     const height = Math.max(1, Math.round(viewH * renderRatio));
+    // Vertex snap is a PS1-only quirk; dot style keeps vertices steady.
     globalRenderUniforms.uSnapGrid.value.set(retro ? width / 2 : 0, retro ? height / 2 : 0);
-    if (targetW === width && targetH === height && targetRetro === retro) return;
+    const targetMode = retro ? 'ps1' : (dotMode ? 'dot' : 'normal');
+    if (targetW === width && targetH === height && targetRetro === targetMode) return;
     targetW = width;
     targetH = height;
-    targetRetro = retro;
+    targetRetro = targetMode;
 
     worldRT?.dispose();
     charRT?.dispose();
@@ -171,6 +178,11 @@ export function createRenderPipeline(viewportWrap, canvas) {
     setRetro(enabled) {
       if (retro === enabled) return;
       retro = enabled;
+      rebuildRenderTargets();
+    },
+    setDot(enabled) {
+      if (dotMode === enabled) return;
+      dotMode = enabled;
       rebuildRenderTargets();
     },
     setPixelSize(size) {
