@@ -8,47 +8,61 @@ import {
   createSuperellipsoidGeometry, createConformalFacePatchGeometry,
 } from './geometry.js?v=2';
 
-function buildBunGeometry(flat) {
-  // 写真の正面輪郭を、耳まで一続きの断面にする。
-  const shape = new THREE.Shape();
-  shape.moveTo(-11.7, .7);
-  shape.bezierCurveTo(-7.7, -.25, 3.7, -.15, 9.9, 1.5);
-  shape.bezierCurveTo(14.5, 2.5, 16.2, 4.5, 16.1, 8.0);
-  shape.bezierCurveTo(16.1, 11.5, 16.1, 15.2, 14.4, 16.7);
-  shape.bezierCurveTo(17.0, 16.6, 18.8, 18.4, 17.9, 20.2);
-  shape.bezierCurveTo(16.9, 22.2, 12.3, 23.6, 8.5, 22.6);
-  shape.bezierCurveTo(6.9, 22.8, 5.5, 23.7, 4.5, 25.3);
-  shape.bezierCurveTo(3.2, 27.5, 2.2, 27.5, .8, 25.8);
-  shape.bezierCurveTo(-.9, 26.0, -2.6, 26.8, -3.6, 24.5);
-  shape.bezierCurveTo(-4.2, 23.5, -5.6, 23.4, -6.8, 22.3);
-  shape.bezierCurveTo(-9.8, 24.1, -15.9, 23.1, -17.8, 20.6);
-  shape.bezierCurveTo(-19.2, 18.7, -17.0, 16.1, -13.6, 16.3);
-  shape.bezierCurveTo(-15.2, 15.1, -16.3, 10.7, -16.1, 6.9);
-  shape.bezierCurveTo(-16.2, 3.6, -14.9, 1.4, -11.7, .7);
-  // 耳の付け根で断面同士が交差しない高さを縮小の中心にする。
-  const centerY = 15.7;
-  const profile = shape.getPoints(flat ? 3 : 6).slice(0, -1)
-    .map(({ x, y }) => [x, -(y - centerY)]);
-
-  // 奥行きに沿って断面を小さくし、前後を丸く閉じる。
-  const rings = [
-    { y: -11.0, sx: .27, sz: .27 },
-    { y: -10.1, sx: .62, sz: .65 },
-    { y: -7.8, sx: .85, sz: .87 },
-    { y: -4.1, sx: .96, sz: .98 },
-    { y:   .5, sx: 1, sz: 1 },
-    { y:  4.7, sx: .96, sz: .98 },
-    { y:  8.0, sx: .86, sz: .89 },
-    { y: 10.0, sx: .68, sz: .72 },
-    { y: 11.0, sx: .42, sz: .46 },
-    { y: 11.35, sx: .20, sz: .26 },
+function buildBunGeometry(lowPoly) {
+  // 頬をふっくらさせた胴に、耳と頭頂のひだを滑らかにつなぐ。
+  const centerY = 11.8;
+  const lobes = [
+    { x: -13.2, y: 18.6, z: .3, rx: 4.65, ry: 3.3, rz: 5.6, blend: 3.9 },
+    { x:  13.5, y: 18.9, z: .2, rx: 4.55, ry: 3.3, rz: 5.3, blend: 3.9 },
+    { x:  -1.8, y: 22.1, z: -.2, rx: 3.8, ry: 3.8, rz: 5.8, blend: 3.6 },
+    { x:   2.1, y: 22.4, z: -.4, rx: 3.6, ry: 4.2, rz: 5.4, blend: 2.5 },
   ];
-  const body = createLowPolyLathe(rings, profile, 1, 1, flat);
-  const rotation = new THREE.Matrix4().makeRotationX(Math.PI / 2);
-  body.applyMatrix4(rotation);
-  body.attributes.aFlatNormal.applyNormalMatrix(new THREE.Matrix3().getNormalMatrix(rotation));
-  body.computeBoundingBox();
-  body.translate(0, -body.boundingBox.min.y, 0);
+
+  // 0 が表面。丸みのある胴から局所的にふくらませ、接続部に段差を作らない。
+  function field(x, y, z) {
+    const power = 2.45;
+    const body = (Math.abs(x / 16.4) ** power
+      + Math.abs((y - centerY) / 11.8) ** power
+      + Math.abs(z / 11.1) ** power) ** (1 / power);
+    let distance = (body - 1) * 11.1;
+    for (const lobe of lobes) {
+      const radius = Math.hypot((x - lobe.x) / lobe.rx, (y - lobe.y) / lobe.ry, (z - lobe.z) / lobe.rz);
+      const bump = (radius - 1) * lobe.ry;
+      const overlap = Math.max(0, 1 - Math.abs(distance - bump) / lobe.blend);
+      distance = Math.min(distance, bump) - overlap * overlap * lobe.blend * .25;
+    }
+    return distance;
+  }
+
+  const body = lowPoly ? new THREE.SphereGeometry(1, 32, 24) : new THREE.SphereGeometry(1, 56, 40);
+  const position = body.attributes.position;
+  const normal = body.attributes.normal;
+  const surfaceNormal = new THREE.Vector3();
+  const step = .025;
+  for (let i = 0; i < position.count; i++) {
+    const dx = position.getX(i);
+    const dy = position.getY(i);
+    const dz = position.getZ(i);
+    let inside = 0;
+    let outside = 26;
+    for (let j = 0; j < 16; j++) {
+      const radius = (inside + outside) * .5;
+      if (field(dx * radius, centerY + dy * radius, dz * radius) < 0) inside = radius;
+      else outside = radius;
+    }
+    const x = dx * inside;
+    const y = centerY + dy * inside;
+    const z = dz * inside;
+    position.setXYZ(i, x * S, y * S, z * S);
+    surfaceNormal.set(
+      field(x + step, y, z) - field(x - step, y, z),
+      field(x, y + step, z) - field(x, y - step, z),
+      field(x, y, z + step) - field(x, y, z - step)
+    ).normalize();
+    normal.setXYZ(i, surfaceNormal.x, surfaceNormal.y, surfaceNormal.z);
+  }
+  // セルシェーダーでも頬と耳に角が出ないよう、表面の法線を共通で使う。
+  ensureFlatNormalAttribute(body);
   const face = createLowPolyFacePatchGeometry(body, {
     width: 36, bottom: 0, top: 27, centerY: 0, pivotY: 0,
   });
