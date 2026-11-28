@@ -493,8 +493,10 @@ function initApp() {
 
   function setSnackStage(stage) {
     plazaState.snack = stage;
+    const served = stage === 2;
+    plaza.center.dish.visible = !served;
     plaza.center.topping.visible = stage >= 1;
-    plaza.left.visible = plaza.right.visible = plaza.residentSnack.visible = stage === 2;
+    plaza.left.visible = plaza.right.visible = plaza.residentSnack.visible = served;
     if (stage === 0) {
       for (const food of Object.values(plaza.snackFood)) food.visible = true;
     }
