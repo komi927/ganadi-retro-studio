@@ -172,6 +172,14 @@ function initApp() {
     graphics.setRetro(isPS1);
     graphics.setDot(isDot);
     document.getElementById('retroResolution').hidden = !(isPS1 || isDot);
+    // Resolution choices are per-mode (PS1 and dot remember separate sizes).
+    const activePx = graphics.getPixelSize();
+    document.getElementById('pixelSizeLabel').textContent = activePx + ' px';
+    document.querySelectorAll('.px-btn').forEach((b) => {
+      const act = Number(b.dataset.px) === activePx;
+      b.classList.toggle('active', act);
+      b.classList.toggle('bg-white', !act);
+    });
 
     // Update geometry across player & all crowd Ganadis
     player.setStyle(styleMode);

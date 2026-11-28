@@ -23,6 +23,7 @@ export function createRenderPipeline(viewportWrap, canvas) {
   const charScene = new THREE.Scene();
 
   let retroSize = 320;
+  let dotSize = 160;
   let retro = false;
   let dotMode = false;
   let viewW, viewH, targetW, targetH;
@@ -108,7 +109,7 @@ export function createRenderPipeline(viewportWrap, canvas) {
     camera.aspect = viewW / viewH;
     camera.updateProjectionMatrix();
 
-    const renderRatio = lowRes ? Math.min(1, retroSize / Math.min(viewW, viewH)) : displayRatio;
+    const renderRatio = lowRes ? Math.min(1, (dotMode ? dotSize : retroSize) / Math.min(viewW, viewH)) : displayRatio;
     const width = Math.max(1, Math.round(viewW * renderRatio));
     const height = Math.max(1, Math.round(viewH * renderRatio));
     // Vertex snap is a PS1-only quirk; dot style keeps vertices steady.
@@ -186,8 +187,11 @@ export function createRenderPipeline(viewportWrap, canvas) {
       rebuildRenderTargets();
     },
     setPixelSize(size) {
-      retroSize = size;
+      if (dotMode) dotSize = size; else retroSize = size;
       rebuildRenderTargets();
+    },
+    getPixelSize() {
+      return dotMode ? dotSize : retroSize;
     },
     setOutline(enabled) {
       compositeMat.uniforms.uOutlineOn.value = enabled ? 1 : 0;
