@@ -2,7 +2,7 @@ import { THREE } from '../three.js';
 import { S, clamp } from '../math.js';
 import { ensureFlatNormalAttribute } from '../graphics/materials.js';
 import {
-  HEAD_LOCAL_CY, HEAD_CENTER_Y, HEAD_RX, HEAD_RY, HEAD_RZ, HEAD_P, FACE_WIDTH, FACE_BOTTOM, FACE_TOP,
+  HEAD_LOCAL_CY, HEAD_CENTER_Y, HEAD_PIVOT_Y, HEAD_RX, HEAD_RY, HEAD_RZ, HEAD_P, FACE_WIDTH, FACE_BOTTOM, FACE_TOP,
 } from './design.js';
 
 // 8-sided chamfered squircle ring (puts a crisp FLAT face directly in front for Ganadi's face!)
@@ -216,6 +216,7 @@ export function createLowPolyCurvedTail() {
 // 頭の前面の三角形に、正面から投影した表情を重ねる。
 export function createLowPolyFacePatchGeometry(head, {
   width = FACE_WIDTH, bottom = FACE_BOTTOM, top = FACE_TOP,
+  centerY = HEAD_CENTER_Y, pivotY = HEAD_PIVOT_Y,
 } = {}) {
   const triangles = head.index ? head.toNonIndexed() : head;
   const position = triangles.attributes.position;
@@ -232,10 +233,10 @@ export function createLowPolyFacePatchGeometry(head, {
       const x = position.getX(j);
       const y = position.getY(j);
       const z = position.getZ(j);
-      positions.push(x, y + HEAD_LOCAL_CY * S, z + .10 * S);
+      positions.push(x, y + (centerY - pivotY) * S, z + .10 * S);
       uvs.push(
         .5 + x / (width * S),
-        (y / S + HEAD_CENTER_Y - bottom) / (top - bottom)
+        (y / S + centerY - bottom) / (top - bottom)
       );
     }
   }
@@ -243,6 +244,7 @@ export function createLowPolyFacePatchGeometry(head, {
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
   geometry.computeVertexNormals();
+  if (triangles !== head) triangles.dispose();
   return geometry;
 }
 

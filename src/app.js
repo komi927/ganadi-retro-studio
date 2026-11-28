@@ -1,9 +1,9 @@
 import { THREE } from './three.js';
 import { MAX_CAMERA_DISTANCE, RAD, WORLD_HALF, clamp } from './math.js?v=2';
 import { playSfx, toggleAudio } from './audio.js';
-import { CHARACTERS, FLOOR_POSES } from './characters/design.js';
-import { buildSharedAssets, buildGonyaniAssets } from './characters/assets.js';
-import { StudioCharacter } from './characters/character.js?v=12';
+import { CHARACTERS, FLOOR_POSES } from './characters/design.js?v=2';
+import { buildSharedAssets, buildGonyaniAssets } from './characters/assets.js?v=3';
+import { StudioCharacter } from './characters/character.js?v=13';
 import { globalRenderUniforms } from './graphics/materials.js';
 import { createRenderPipeline } from './graphics/renderer.js?v=10';
 import { createWorld } from './world/scene.js?v=10';
@@ -240,26 +240,30 @@ function initApp() {
     updateStatus();
   }
 
-  function fitStudioFormZoom() {
+  function fitStudioFormZoom(pose = player.renderPose) {
     const horizontalSpan = 2 * Math.tan(camera.fov * RAD / 2) * camera.aspect;
-    appState.distance = clamp(Math.max(appState.studioFormZoom, 3.18 / horizontalSpan + .35), 4, MAX_CAMERA_DISTANCE);
+    const bun = pose === 'bun';
+    const width = bun ? 2.1 : 3.18;
+    const distance = bun ? Math.min(appState.studioFormZoom, 4.6) : appState.studioFormZoom;
+    appState.distance = clamp(Math.max(distance, width / horizontalSpan + .35), 4, MAX_CAMERA_DISTANCE);
   }
 
   function frameStudioForm(pose) {
     if (appState.mode !== 'studio') return;
     const wide = FLOOR_POSES.has(pose);
-    if (wide) {
+    const bun = pose === 'bun';
+    if (wide || bun) {
       appState.studioFormZoom ??= appState.distance;
-      fitStudioFormZoom();
+      fitStudioFormZoom(pose);
     } else if (appState.studioFormZoom !== null) {
       appState.distance = appState.studioFormZoom;
       appState.studioFormZoom = null;
     }
-    if (wide || pose === 'mochi') {
+    if (wide || bun || pose === 'mochi') {
       appState.autoRotate = false;
       document.getElementById('chkAutoRot').checked = false;
-      appState.targetYawDeg = wide ? 62 : 26;
-      appState.targetPitchDeg = wide ? 19 : 13;
+      appState.targetYawDeg = bun ? 0 : wide ? 62 : 26;
+      appState.targetPitchDeg = bun ? 6 : wide ? 19 : 13;
     }
   }
 
@@ -1300,7 +1304,7 @@ function initApp() {
       if (shutter) captureBenchPhoto();
 
       updateCrowd(player, companion, crowd, ballState, interactWithWorld, dt);
-      footprints.step(player, moving && !staged);
+      footprints.step(player, moving && !staged && player.renderPose !== 'bun');
       footprints.step(companion, !staged && (companion?.renderPose === 'walk' || companion?.renderPose === 'run'));
       for (const npc of crowd) footprints.step(npc, npc.renderPose === 'walk' || npc.renderPose === 'run');
       world.updateProps(dt, timeSec);
@@ -1310,10 +1314,11 @@ function initApp() {
     footprints.update(dt);
 
     // Orbit Camera Update
-    const studioHeight = player.floorPose ? .72 : (player.renderPose === 'mochi' ? .99 : 1.15);
+    const bun = player.renderPose === 'bun';
+    const studioHeight = bun ? .68 : player.floorPose ? .72 : (player.renderPose === 'mochi' ? .99 : 1.15);
     let focus = isStudio
       ? _projVec.set(0, studioHeight, 0)
-      : (plazaState.focus?.point || _projVec.set(player.pos.x, player.pos.y + 1.15, player.pos.z));
+      : (plazaState.focus?.point || _projVec.set(player.pos.x, player.pos.y + (bun && !companion ? .68 : 1.15), player.pos.z));
     if (benchClimb.active && graphics.width <= 360 && menus.plazaOpen) {
       focus = _projVec.copy(focus);
       focus.x += 1.12;

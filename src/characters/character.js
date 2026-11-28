@@ -1,7 +1,7 @@
 import { THREE } from '../three.js';
 import { S, RAD, clamp } from '../math.js';
 import { HEAD_LOCAL_CY, HEAD_PIVOT_Y, HEAD_RY, FLOOR_POSES } from './design.js';
-import { getFaceMaterial } from './faces.js?v=7';
+import { getFaceMaterial } from './faces.js?v=8';
 
 const BIPED_POSES = new Set(['sit', 'bow', 'perch', 'cheek']);
 
@@ -150,6 +150,15 @@ export class StudioCharacter {
         paw.rotation.z = side * .87;
         this.mochiMesh.add(paw);
       }
+
+      this.bunGroup = new THREE.Group();
+      this.bunGroup.visible = false;
+      this.bodyGroup.add(this.bunGroup);
+      this.bunGroup.add(makePart('Bun', 'bunBody', 'bunBody', mats.bun));
+      this.bunFaceMesh = new THREE.Mesh(geos.bunFace, getFaceMaterial('bun', initialStyle));
+      this.bunFaceMesh.name = 'Bun_Face';
+      this.bunGroup.add(this.bunFaceMesh);
+      this.swappableParts.push({ mesh: this.bunFaceMesh, lowKey: 'bunFace', smoothKey: 'bunFace' });
     }
 
     // ---- CURLED FLUFFY TAIL (1-piece low-poly vs 3-puff smooth) ----
@@ -321,6 +330,7 @@ export class StudioCharacter {
   setStyle(styleMode) {
     this.styleMode = styleMode;
     this.faceMesh.material = getFaceMaterial(this.currentFace, styleMode);
+    if (this.bunFaceMesh) this.bunFaceMesh.material = getFaceMaterial('bun', styleMode);
     const isSmooth = (styleMode === 'smooth');
     const { lowGeos, smoothGeos } = this.assets;
     for (let i = 0; i < this.swappableParts.length; i++) {
@@ -344,7 +354,7 @@ export class StudioCharacter {
 
   getTriangleCount() {
     const pose = this.renderPose;
-    const body = pose === 'mochi' ? this.mochiMesh
+    const body = pose === 'bun' ? this.bunGroup : pose === 'mochi' ? this.mochiMesh
       : (FLOOR_POSES.has(pose) || (this.quadMode && !BIPED_POSES.has(pose)) ? this.quadGroup : this.bipedGroup);
     let tris = 0;
     const countTree = (obj) => {
@@ -411,6 +421,7 @@ export class StudioCharacter {
     let pose = em.pose;
     if (perched) pose = 'perch';
     else if (paired) pose = 'cheek';
+    else if (pose === 'bun') pose = this.snackGesture ? 'sit' : 'bun';
     else if (moving) pose = sprinting ? 'run' : 'walk';
     else if (!this.onGround) pose = 'jump';
     else if (this.snackGesture) pose = 'sit';
@@ -428,7 +439,9 @@ export class StudioCharacter {
     const qb = this.quadBlend;
     const floorPose = FLOOR_POSES.has(pose);
     const mochi = pose === 'mochi';
+    const bun = pose === 'bun';
     const changedForm = floorPose !== this.floorPose || mochi !== (this.renderPose === 'mochi')
+      || bun !== (this.renderPose === 'bun')
       || (floorPose && this.isGonyani && pose !== this.renderPose)
       || useBipedPose !== BIPED_POSES.has(this.renderPose);
     this.renderPose = pose;
@@ -437,11 +450,13 @@ export class StudioCharacter {
     this.petFor = Math.max(0, this.petFor - dt);
 
     // 歩行リグの切り替えとは独立して、休んでいる姿勢では胴体を置き直す。
-    this.bipedGroup.visible = !floorPose && !mochi && qb < .96;
-    this.quadGroup.visible = !mochi && (floorPose || qb > .04);
+    this.bipedGroup.visible = !bun && !floorPose && !mochi && qb < .96;
+    this.quadGroup.visible = !bun && !mochi && (floorPose || qb > .04);
     this.bipedGroup.scale.setScalar(Math.max(.001, 1 - qb));
     this.quadGroup.scale.setScalar(floorPose ? 1 : Math.max(.001, qb));
     if (this.mochiMesh) this.mochiMesh.visible = mochi;
+    if (this.bunGroup) this.bunGroup.visible = bun;
+    this.headPivot.visible = !bun;
 
     // Automatic expression override while sprinting/jumping (respecting active emote when idle)
     if (this.sharedNap) {
@@ -647,9 +662,15 @@ export class StudioCharacter {
       headRoll = -.11 + Math.sin(t * .78) * .04;
       tailWag = 0;
       this.mochiMesh.scale.set(1, 1 + Math.sin(t * .76) * .028, 1);
+    } else if (bun) {
+      const bounce = moving && this.onGround ? Math.abs(s) : 0;
+      const breathe = Math.sin(t * .65) * .016;
+      const pet = Math.sin(clamp((1.4 - this.petFor) / .52, 0, 1) * Math.PI);
+      bodyY = bounce * (sprinting ? .16 : .09);
+      this.bunGroup.scale.set(1 - breathe + .035 * pet, 1 + breathe + .04 * bounce - .06 * pet, 1);
     }
 
-    if (this.petFor > 0 && !moving && this.onGround) {
+    if (!bun && this.petFor > 0 && !moving && this.onGround) {
       const twitch = Math.sin(clamp((1.4 - this.petFor) / .52, 0, 1) * Math.PI);
       headRoll += (this.isGonyani ? -.16 : .16) * twitch;
       if (!floorPose) bodyY += (this.isGonyani ? .025 : .095) * twitch;
@@ -704,7 +725,7 @@ export class StudioCharacter {
       THREE.MathUtils.lerp(this.isGonyani ? -5.6 : -7.9, -11.4, qb) * S
     );
     this.tailPivot.rotation.set(tailPitch, tailWag, 0);
-    this.tailPivot.visible = !mochi;
+    this.tailPivot.visible = !mochi && !bun;
     if (this.isGonyani) this.tailPivot.scale.setScalar(pose === 'wary' ? 1.34 : 1);
     if (floorPose) {
       this.applyFloorPose(pose, t);
@@ -745,10 +766,10 @@ export class StudioCharacter {
 
     // Update Soft Elliptical Ground Shadow Disc directly under Ganadi
     const hFactor = clamp(1.0 - this.pos.y * 0.14, 0.42, 1.0);
-    const rxSh = THREE.MathUtils.lerp(0.68, 0.74, qb) * hFactor;
-    const rzSh = (floorPose ? 1.05 : THREE.MathUtils.lerp(.60, .96, qb)) * hFactor;
+    const rxSh = (bun ? .81 : THREE.MathUtils.lerp(0.68, 0.74, qb)) * hFactor;
+    const rzSh = (bun ? .56 : floorPose ? 1.05 : THREE.MathUtils.lerp(.60, .96, qb)) * hFactor;
     const sunset = !isStudioMode && this.evening;
-    const cast = sunset ? (floorPose ? .32 : .77) + this.pos.y * .42 : 0;
+    const cast = sunset ? (floorPose || bun ? .32 : .77) + this.pos.y * .42 : 0;
     this.shadowMesh.position.set(this.pos.x + .44 * cast, .026, this.pos.z + cast);
     this.shadowMesh.rotation.y = sunset ? .415 : this.yaw;
     this.shadowMesh.scale.set(rxSh, 1, rzSh + cast);
@@ -810,6 +831,7 @@ export class StudioCharacter {
   }
 
   getHeadTopWorldPos(target) {
+    if (this.renderPose === 'bun') return this.bunGroup.localToWorld(target.set(0, 1.35, 0));
     if (this.floorPose || this.mochiMesh?.visible) {
       this.headMesh.getWorldPosition(target);
       target.y += .79;
