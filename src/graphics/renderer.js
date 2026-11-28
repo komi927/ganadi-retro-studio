@@ -105,19 +105,17 @@ export function createRenderPipeline(viewportWrap, canvas) {
       window.devicePixelRatio || 1, 2, Math.sqrt(2400000 / (viewW * viewH))
     ));
     if (renderer.getPixelRatio() !== displayRatio) renderer.setPixelRatio(displayRatio);
-    // Dot style follows the original 3D Dot Playground: shrink the canvas
-    // buffer itself to 1/dotScale and let CSS image-rendering: pixelated
-    // upscale it into crisp dots (the canvas element carries .dot-canvas).
-    const bufferW = dotMode ? Math.max(1, Math.round(viewW / dotScale)) : viewW;
-    const bufferH = dotMode ? Math.max(1, Math.round(viewH / dotScale)) : viewH;
-    renderer.setSize(bufferW, bufferH, false);
+    renderer.setSize(viewW, viewH, false);
     camera.aspect = viewW / viewH;
     camera.updateProjectionMatrix();
 
     let width, height;
     if (dotMode) {
-      width = bufferW;
-      height = bufferH;
+      // Original 3D Dot Playground pipeline: the canvas stays full-size and
+      // the render targets drop to floor(view / pixelScale); the composite
+      // pass samples them with NearestFilter, which produces the chunky dots.
+      width = Math.max(64, Math.floor(viewW / dotScale));
+      height = Math.max(64, Math.floor(viewH / dotScale));
     } else {
       const renderRatio = retro ? Math.min(1, retroSize / Math.min(viewW, viewH)) : displayRatio;
       width = Math.max(1, Math.round(viewW * renderRatio));

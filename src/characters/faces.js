@@ -14,7 +14,7 @@ export function getFaceMaterial(faceId, style) {
   if (faceMaterialCache[key]) return faceMaterialCache[key];
 
   const cvs = document.createElement('canvas');
-  const size = retroFace ? 128 : 512;
+  const size = style === 'dot' ? 64 : (retroFace ? 128 : 512);
   cvs.width = size;
   cvs.height = size;
   const ctx = cvs.getContext('2d');
@@ -25,6 +25,10 @@ export function getFaceMaterial(faceId, style) {
   const WHITE = '#fffdf9';
   const TEAR_BLUE = '#a0c6e0';
   const CHEEK_PINK = '#efb5c3';
+
+  if (style === 'dot' && PIXEL_FACE_IDS.has(faceId)) {
+    drawPixelFace(ctx, faceId);
+  } else {
 
   function oval(x, y, rx, ry, rotation, color = INK) {
     ctx.beginPath();
@@ -179,6 +183,8 @@ export function getFaceMaterial(faceId, style) {
     drawOmegaMouth();
   }
 
+  }
+
   const tex = new THREE.CanvasTexture(cvs);
   tex.minFilter = pixelFace ? THREE.NearestFilter : THREE.LinearMipmapLinearFilter;
   tex.magFilter = pixelFace ? THREE.NearestFilter : THREE.LinearFilter;
@@ -229,4 +235,171 @@ export function getFaceMaterial(faceId, style) {
   mat.userData.faceId = faceId;
   faceMaterialCache[key] = mat;
   return mat;
+}
+
+/**
+ * 旧「3Dドット・プレイグラウンド」の64×64ピクセルアート顔をそのまま移植。
+ * ドット絵スタイルのときだけ使う（対象外の顔は従来の描画を64pxで使う）。
+ */
+const PIXEL_FACE_IDS = new Set(['normal', 'hug', 'du', 'cry', 'geso', 'happy', 'fierce', 'devil', 'rose', 'sleep']);
+
+function drawPixelFace(ctx, faceId) {
+ctx.clearRect(0, 0, 64, 64);
+
+const INK       = '#222532';
+const WHITE     = '#ffffff';
+const BLUSH     = '#ffa6be';
+const TEAR_DARK = '#4eb3ff';
+const TEAR_LITE = '#a8e2ff';
+const MOUTH_PNK = '#f26a88';
+const GLOOM_GRY = '#8092b0';
+
+function pRect(x, y, w, h, col) {
+  ctx.fillStyle = col;
+  ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
+}
+
+function pDisk(cx, cy, r, col) {
+  ctx.fillStyle = col;
+  const x0 = Math.floor(cx - r), x1 = Math.ceil(cx + r);
+  const y0 = Math.floor(cy - r), y1 = Math.ceil(cy + r);
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      if ((x - cx) * (x - cx) + (y - cy) * (y - cy) <= r * r + 0.25) {
+        ctx.fillRect(x, y, 1, 1);
+      }
+    }
+  }
+}
+
+function pLine(x0, y0, x1, y1, r, col) {
+  const steps = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0), 1) * 2;
+  for (let s = 0; s <= steps; s++) {
+    const t = s / steps;
+    pDisk(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, r, col);
+  }
+}
+
+function drawNose(ny = 43) {
+  pRect(30, ny - 1, 4, 3, INK);
+}
+
+function drawOmegaMouth() {
+  pRect(31, 44, 2, 4, INK);
+  pLine(32, 48, 28, 51, 1.15, INK);
+  pLine(28, 51, 24, 49, 1.10, INK);
+  pLine(32, 48, 36, 51, 1.15, INK);
+  pLine(36, 51, 40, 49, 1.10, INK);
+}
+
+function drawBlush(y = 31) {
+  pDisk(10, y, 3.6, BLUSH);
+  pDisk(12, y, 3.2, BLUSH);
+  pDisk(54, y, 3.6, BLUSH);
+  pDisk(52, y, 3.2, BLUSH);
+}
+
+if (faceId === 'normal') {
+  pDisk(15, 21, 2.7, INK);
+  pDisk(49, 21, 2.7, INK);
+  drawNose(43);
+  drawOmegaMouth();
+} else if (faceId === 'hug') {
+  pDisk(15, 21, 3.8, INK);
+  pDisk(49, 21, 3.8, INK);
+  pDisk(13.5, 19.5, 1.45, WHITE);
+  pDisk(47.5, 19.5, 1.45, WHITE);
+  pDisk(16.5, 22.8, 1.0, TEAR_LITE);
+  pDisk(50.5, 22.8, 1.0, TEAR_LITE);
+  drawBlush(31);
+  drawNose(43);
+  pRect(31, 44, 2, 4, INK);
+  pLine(27, 50, 32, 48, 1.15, INK);
+  pLine(32, 48, 37, 50, 1.15, INK);
+} else if (faceId === 'du') {
+  pLine(10, 14, 19, 11, 1.2, INK);
+  pLine(54, 14, 45, 11, 1.2, INK);
+  pDisk(15, 21, 4.0, INK);
+  pDisk(49, 21, 4.0, INK);
+  pRect(12, 23, 7, 3, TEAR_DARK);
+  pRect(45, 23, 7, 3, TEAR_DARK);
+  pRect(13, 22, 5, 2, TEAR_LITE);
+  pRect(46, 22, 5, 2, TEAR_LITE);
+  pDisk(13.5, 19.5, 1.5, WHITE);
+  pDisk(47.5, 19.5, 1.5, WHITE);
+  pDisk(14, 29, 1.6, TEAR_DARK);
+  pDisk(50, 29, 1.6, TEAR_DARK);
+  drawNose(43);
+  pLine(26, 51, 32, 47, 1.2, INK);
+  pLine(32, 47, 38, 51, 1.2, INK);
+} else if (faceId === 'cry') {
+  pRect(12, 23, 6, 33, TEAR_DARK);
+  pRect(46, 23, 6, 33, TEAR_DARK);
+  pRect(14, 24, 2, 31, TEAR_LITE);
+  pRect(48, 24, 2, 31, TEAR_LITE);
+  pLine(10, 17, 19, 21, 1.4, INK);
+  pLine(19, 21, 10, 25, 1.4, INK);
+  pLine(54, 17, 45, 21, 1.4, INK);
+  pLine(45, 21, 54, 25, 1.4, INK);
+  drawNose(42);
+  pDisk(32, 51, 5.2, INK);
+  pDisk(32, 51.5, 3.6, MOUTH_PNK);
+} else if (faceId === 'geso') {
+  const gxList = [12, 18, 24, 40, 46, 52];
+  gxList.forEach((gx, idx) => {
+    pRect(gx, 4 + (idx % 2) * 2, 2, 10, GLOOM_GRY);
+  });
+  pRect(10, 20, 10, 3, INK);
+  pRect(44, 20, 10, 3, INK);
+  pRect(11, 24, 8, 2, GLOOM_GRY);
+  pRect(45, 24, 8, 2, GLOOM_GRY);
+  drawNose(43);
+  pRect(27, 49, 10, 3, INK);
+} else if (faceId === 'happy') {
+  pLine(10, 23, 15, 17, 1.4, INK);
+  pLine(15, 17, 20, 23, 1.4, INK);
+  pLine(44, 23, 49, 17, 1.4, INK);
+  pLine(49, 17, 54, 23, 1.4, INK);
+  drawBlush(31);
+  drawNose(42);
+  pLine(25, 48, 32, 50, 1.3, INK);
+  pLine(32, 50, 39, 48, 1.3, INK);
+  pDisk(32, 52.5, 3.4, INK);
+  pDisk(32, 53, 2.2, MOUTH_PNK);
+} else if (faceId === 'fierce') {
+  pLine(9, 12, 21, 18, 1.6, INK);
+  pLine(55, 12, 43, 18, 1.6, INK);
+  pDisk(15, 22, 2.9, INK);
+  pDisk(49, 22, 2.9, INK);
+  drawNose(38);
+  pRect(22, 43, 20, 13, INK);
+  pRect(24, 45, 16, 9, MOUTH_PNK);
+  pRect(25, 45, 3, 4, WHITE);
+  pRect(36, 45, 3, 4, WHITE);
+} else if (faceId === 'devil') {
+  pLine(10, 14, 20, 18, 1.4, INK);
+  pLine(54, 14, 44, 18, 1.4, INK);
+  pDisk(15, 22, 2.9, INK);
+  pDisk(49, 22, 2.9, INK);
+  drawNose(42);
+  pLine(25, 50, 33, 51, 1.3, INK);
+  pLine(33, 51, 41, 46, 1.3, INK);
+} else if (faceId === 'rose') {
+  pLine(10, 15, 20, 16, 1.25, INK);
+  pLine(44, 16, 54, 15, 1.25, INK);
+  pDisk(15, 21, 2.8, INK);
+  pDisk(49, 21, 2.8, INK);
+  drawNose(43);
+  pLine(27, 50, 33, 50, 1.2, INK);
+  pLine(33, 50, 39, 47, 1.2, INK);
+} else if (faceId === 'sleep') {
+  pLine(10, 20, 15, 24, 1.35, INK);
+  pLine(15, 24, 20, 20, 1.35, INK);
+  pLine(44, 20, 49, 24, 1.35, INK);
+  pLine(49, 24, 54, 20, 1.35, INK);
+  drawBlush(31);
+  drawNose(42);
+  pDisk(32, 50, 2.6, INK);
+  pDisk(32, 50, 1.2, MOUTH_PNK);
+}
 }
