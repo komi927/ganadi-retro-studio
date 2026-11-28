@@ -53,6 +53,7 @@ export function createRenderPipeline(viewportWrap, canvas) {
       uTexelSize:    { value: new THREE.Vector2() },
       uOutlineOn:    { value: 0.0 },
       uOutlineColor: { value: new THREE.Vector3(0.133, 0.145, 0.196) }, // #222532
+      uEvening:      { value: 0.0 },
     },
     vertexShader: `
       varying vec2 vUv;
@@ -67,6 +68,7 @@ export function createRenderPipeline(viewportWrap, canvas) {
       uniform vec2 uTexelSize;
       uniform float uOutlineOn;
       uniform vec3 uOutlineColor;
+      uniform float uEvening;
       varying vec2 vUv;
 
       void main() {
@@ -80,7 +82,9 @@ export function createRenderPipeline(viewportWrap, canvas) {
           background = mix(background, uOutlineColor, max(max(aL, aR), max(aU, aD)));
         }
         // MSAAで解決した手前側のRGBには、画素を占める割合がすでに掛かっている。
-        gl_FragColor = vec4(charCol.rgb + background * (1.0 - charCol.a), 1.0);
+        vec3 color = charCol.rgb + background * (1.0 - charCol.a);
+        vec3 evening = color * vec3(1.01, 0.92, 0.89) + vec3(0.032, 0.012, 0.027);
+        gl_FragColor = vec4(mix(color, evening, uEvening), 1.0);
       }
     `,
     depthTest: false,
@@ -122,16 +126,16 @@ export function createRenderPipeline(viewportWrap, canvas) {
   }
   rebuildRenderTargets();
 
-  function renderPipeline() {
+  function renderPipeline(view = camera) {
     renderer.setRenderTarget(worldRT);
     renderer.setClearColor(0xd9f0ff, 1);
     renderer.clear();
-    renderer.render(worldScene, camera);
+    renderer.render(worldScene, view);
 
     renderer.setRenderTarget(charRT);
     renderer.setClearColor(0x000000, 0);
     renderer.clear();
-    renderer.render(charScene, camera);
+    renderer.render(charScene, view);
 
     renderer.setRenderTarget(null);
     renderer.clear();
@@ -175,6 +179,9 @@ export function createRenderPipeline(viewportWrap, canvas) {
     },
     setOutline(enabled) {
       compositeMat.uniforms.uOutlineOn.value = enabled ? 1 : 0;
+    },
+    setEvening(enabled) {
+      compositeMat.uniforms.uEvening.value = enabled ? 1 : 0;
     },
     isContextLost() {
       return renderer.getContext().isContextLost();

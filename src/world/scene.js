@@ -3,13 +3,14 @@ import { S, WORLD_HALF, clamp } from '../math.js';
 import { OCT_SQUIRCLE, createLowPolyLathe } from '../characters/geometry.js';
 import { playSfx } from '../audio.js';
 import { createCelMaterial, ensureFlatNormalAttribute } from '../graphics/materials.js';
-import { buildPlaza } from './plaza.js?v=7';
+import { buildPlaza } from './plaza.js?v=10';
 
 export function createWorld(worldScene, charScene, mats) {
   // ---- SKY GRADIENT DOME (World Scene) ----
   const skyUniforms = {
     uTop:    { value: new THREE.Color('#9cd7ff') },
     uBottom: { value: new THREE.Color('#e8f7ff') },
+    uEvening: { value: 0 },
   };
   const skyDome = new THREE.Mesh(
     new THREE.SphereGeometry(95, 24, 16),
@@ -27,10 +28,15 @@ export function createWorld(worldScene, charScene, mats) {
       fragmentShader: `
         uniform vec3 uTop;
         uniform vec3 uBottom;
+        uniform float uEvening;
         varying vec3 vWorldPos;
         void main() {
-          float h = clamp(normalize(vWorldPos).y * 1.35 + 0.18, 0.0, 1.0);
-          gl_FragColor = vec4(mix(uBottom, uTop, h), 1.0);
+          vec3 direction = normalize(vWorldPos);
+          float h = clamp(direction.y * 1.35 + 0.18, 0.0, 1.0);
+          float light = dot(direction, normalize(vec3(-0.44, 0.10, -1.0)));
+          vec3 sky = mix(uBottom, uTop, h);
+          sky = mix(sky, vec3(1.0, .91, .67), uEvening * smoothstep(.9981, .999, light));
+          gl_FragColor = vec4(sky, 1.0);
         }
       `,
     })
@@ -97,6 +103,7 @@ export function createWorld(worldScene, charScene, mats) {
     [ 0.2, -9.0, 0.96],
   ];
   const trees = [];
+  const treeShadows = [];
   treeCoords.forEach(([tx, tz, ts]) => {
     const tg = new THREE.Group();
     const tr = new THREE.Mesh(treeTrunkGeo, mats.trunk);
@@ -110,6 +117,7 @@ export function createWorld(worldScene, charScene, mats) {
       new THREE.MeshBasicMaterial({ color: 0x5c8e66, transparent: true, opacity: 0.22, depthWrite: false })
     );
     sh.position.y = 0.02;
+    treeShadows.push(sh);
     tg.add(tr, c1, c2, sh);
     tg.position.set(tx, 0, tz);
     tg.scale.setScalar(ts);
@@ -308,14 +316,29 @@ export function createWorld(worldScene, charScene, mats) {
     { x: plaza.snackTable.position.x, z: plaza.snackTable.position.z, r: .59 },
   ];
 
-  function setMode(mode) {
+  function setMode(mode, evening = false) {
     const isWorld = mode === 'world';
     worldMeadowGroup.visible = isWorld;
     worldPropsGroup.visible = isWorld;
     treeOccluders.visible = isWorld;
     studioPedestalGroup.visible = !isWorld;
-    skyUniforms.uTop.value.set(isWorld ? '#9cd7ff' : '#98b4d3');
-    skyUniforms.uBottom.value.set(isWorld ? '#e8f7ff' : '#b0c6df');
+    setEvening(isWorld, evening);
+  }
+
+  function setEvening(isWorld, evening) {
+    const sunset = isWorld && evening;
+    skyUniforms.uEvening.value = Number(sunset);
+    skyUniforms.uTop.value.set(sunset ? '#9c8abd' : isWorld ? '#9cd7ff' : '#98b4d3');
+    skyUniforms.uBottom.value.set(sunset ? '#ffcbaf' : isWorld ? '#e8f7ff' : '#b0c6df');
+    floorMesh.material.color.set(sunset ? 0xdac7ae : 0xffffff);
+    plazaMesh.material.color.set(sunset ? 0xffdfc2 : 0xfff8e6);
+    for (const shadow of treeShadows) {
+      shadow.position.x = sunset ? .53 : 0;
+      shadow.position.z = sunset ? 1.21 : 0;
+      shadow.rotation.y = sunset ? .415 : 0;
+      shadow.scale.z = sunset ? 2.1 : 1;
+      shadow.material.color.setHex(sunset ? 0x715b68 : 0x5c8e66);
+    }
   }
 
   function updateProps(dt, timeSec) {
@@ -392,6 +415,6 @@ export function createWorld(worldScene, charScene, mats) {
 
   return {
     worldPropsGroup, treeOccluders, plaza, obstacles,
-    ballState, cushionState, riceState, spawnRiceSparkles, setMode, updateProps,
+    ballState, cushionState, riceState, spawnRiceSparkles, setMode, setEvening, updateProps,
   };
 }

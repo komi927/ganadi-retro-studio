@@ -3,7 +3,7 @@ import { S, RAD, clamp } from '../math.js';
 import { HEAD_LOCAL_CY, HEAD_PIVOT_Y, HEAD_RY, FLOOR_POSES } from './design.js';
 import { getFaceMaterial } from './faces.js?v=7';
 
-const BIPED_POSES = new Set(['sit', 'bow', 'perch', 'cheek']);
+const BIPED_POSES = new Set(['sit', 'bow', 'perch', 'cheek', 'photo']);
 
 export class StudioCharacter {
   constructor(character, assets, worldScene, charScene, isPlayer = false, initialStyle = 'lowpoly') {
@@ -304,6 +304,10 @@ export class StudioCharacter {
     this.cheekLean = null;
     this.idleGlance = 0;
     this.snackGesture = null;
+    this.sharedNap = false;
+    this.waryStep = 0;
+    this.photoLook = null;
+    this.evening = false;
     this.floorPose = false;
     this.renderPose = 'idle';
     this.animPhase = Math.random() * 10;
@@ -407,9 +411,12 @@ export class StudioCharacter {
     let pose = em.pose;
     if (perched) pose = 'perch';
     else if (paired) pose = 'cheek';
+    else if (this.photoLook !== null) pose = 'photo';
     else if (moving) pose = sprinting ? 'run' : 'walk';
     else if (!this.onGround) pose = 'jump';
     else if (this.snackGesture) pose = 'sit';
+    else if (this.sharedNap) pose = this.isGonyani ? 'loaf' : 'sleep';
+    else if (this.waryStep) pose = 'wary';
     const finishedBow = pose === 'bow' && this.emoteAge >= .86;
     if (finishedBow) pose = 'idle';
     const useBipedPose = BIPED_POSES.has(pose);
@@ -436,7 +443,9 @@ export class StudioCharacter {
     if (this.mochiMesh) this.mochiMesh.visible = mochi;
 
     // Automatic expression override while sprinting/jumping (respecting active emote when idle)
-    if (this.isGonyani) {
+    if (this.sharedNap) {
+      this.setFace(this.isGonyani ? 'gonyani-sleep' : 'sleep');
+    } else if (this.isGonyani) {
       this.setFace(pose === 'jump' || (moving && em.pose === 'sleep') ? this.emotes[0].face : em.face);
     } else if (!this.onGround) {
       this.setFace(this.vel.y >= 0 ? 'happy' : 'normal');
@@ -471,6 +480,10 @@ export class StudioCharacter {
     } else if (pose === 'stare') {
       headYaw = .14;
       tailWag = Math.sin(t * .7) * .08;
+    } else if (pose === 'photo') {
+      headPitch = -.27 * this.photoLook;
+      headRoll = this.isGonyani ? .045 : -.06;
+      this.setFace(this.emotes[0].face);
     } else if (pose === 'cheek') {
       const { side, amount } = this.cheekLean;
       const lean = side * amount;
@@ -487,6 +500,11 @@ export class StudioCharacter {
       earLFlap = -.57; earRFlap = -.57;
       tailPitch = -.19;
       tailWag = Math.sin(t * 2.4) * .18;
+      if (this.waryStep) {
+        footLP = Math.sin(t * 3.2) * .56 * this.waryStep;
+        footRP = -footLP;
+        this.setFace('gonyani-wary');
+      }
     } else if (pose === 'walk') {
       bodyY = Math.abs(s) * 0.9 * S;
       bodyRoll = s * 0.07;
@@ -729,10 +747,12 @@ export class StudioCharacter {
     const hFactor = clamp(1.0 - this.pos.y * 0.14, 0.42, 1.0);
     const rxSh = THREE.MathUtils.lerp(0.68, 0.74, qb) * hFactor;
     const rzSh = (floorPose ? 1.05 : THREE.MathUtils.lerp(.60, .96, qb)) * hFactor;
-    this.shadowMesh.position.set(this.pos.x, 0.025, this.pos.z);
-    this.shadowMesh.rotation.y = this.yaw;
-    this.shadowMesh.scale.set(rxSh, 1, rzSh);
-    this.shadowMat.color.setHex(isStudioMode ? 0x8ea4c2 : 0x5c8e66);
+    const sunset = !isStudioMode && this.evening;
+    const cast = sunset ? (floorPose ? .32 : .77) + this.pos.y * .42 : 0;
+    this.shadowMesh.position.set(this.pos.x + .44 * cast, .026, this.pos.z + cast);
+    this.shadowMesh.rotation.y = sunset ? .415 : this.yaw;
+    this.shadowMesh.scale.set(rxSh, 1, rzSh + cast);
+    this.shadowMat.color.setHex(isStudioMode ? 0x8ea4c2 : sunset ? 0x715b68 : 0x5c8e66);
     this.shadowMat.opacity = (isStudioMode ? 0.22 : 0.28) * hFactor;
     return changedForm;
   }

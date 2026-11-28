@@ -3,13 +3,15 @@ import { MAX_CAMERA_DISTANCE, RAD, WORLD_HALF, clamp } from './math.js?v=2';
 import { playSfx, toggleAudio } from './audio.js';
 import { CHARACTERS, FLOOR_POSES } from './characters/design.js';
 import { buildSharedAssets, buildGonyaniAssets } from './characters/assets.js';
-import { StudioCharacter } from './characters/character.js?v=8';
+import { StudioCharacter } from './characters/character.js?v=10';
 import { globalRenderUniforms } from './graphics/materials.js';
-import { createRenderPipeline } from './graphics/renderer.js';
-import { createWorld } from './world/scene.js?v=7';
+import { createRenderPipeline } from './graphics/renderer.js?v=10';
+import { createWorld } from './world/scene.js?v=10';
 import { BENCH_REACH, createBenchClimb } from './world/bench-climb.js?v=2';
 import { createCheekNuzzle } from './world/cheek-nuzzle.js?v=3';
 import { createIdleExchange, createSnackTime } from './world/plaza-moments.js?v=8';
+import { createBenchPhoto, createSharedNap, createWaryStep } from './world/plaza-play.js?v=10';
+import { createFootprints } from './world/footprints.js?v=10';
 import { createWorldInteractions, movePlayer, updateCrowd } from './world/physics.js';
 import { createTransparentPng } from './export/png.js';
 import { buildCharacterGlb } from './export/glb.js';
@@ -30,6 +32,10 @@ function initApp() {
   const cheekNuzzle = createCheekNuzzle();
   const idleExchange = createIdleExchange();
   const snackTime = createSnackTime(plaza);
+  const benchPhoto = createBenchPhoto(plaza);
+  const sharedNap = createSharedNap();
+  const waryStep = createWaryStep();
+  const footprints = createFootprints(worldScene);
 
   // ---- PLAYABLE CHARACTERS & AUTONOMOUS CROWD ----
   const characterAssets = { ganadi: assets, gonyani: buildGonyaniAssets(assets) };
@@ -43,12 +49,14 @@ function initApp() {
   let companion = null;
   let companionBeat = null;
   let plazaReply = null;
+  let residentPhoto = null;
   const plazaState = { snack: 0, attention: 0, focus: null };
   const snackActions = ['🍓 いちごをのせる', '🍰 おやつを分ける', '↺ もう一度つくる'];
   const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
 
   const appState = {
     mode: 'world', // 'world' | 'studio'
+    evening: false,
     styleMode: 'lowpoly', // 'lowpoly' | 'ps1' | 'smooth'
     flatShading: true,
     wireframeOn: false,
@@ -77,6 +85,9 @@ function initApp() {
   const speechBubbleEl = document.getElementById('speechBubble');
   const plazaBubbleEl = document.getElementById('plazaBubble');
   const companionButton = document.getElementById('btnCompanion');
+  const benchPhotoButton = document.getElementById('btnBenchPhoto');
+  const eveningButton = document.getElementById('btnEvening');
+  const scenePhotoButton = document.getElementById('btnScenePhoto');
   // 旧版の HTML がキャッシュに残っている間も起動できるようにする。
   const plazaActionButton = document.getElementById('btnPlazaAction') || document.getElementById('btnSnackAction');
   const formsButton = document.getElementById('btnForms');
@@ -225,6 +236,8 @@ function initApp() {
   function petActor(actor) {
     cancelCheekNuzzle();
     cancelSnackTime();
+    cancelBenchPhoto();
+    sharedNap.reset();
     idleExchange.reset();
     actor.petFor = 1.4;
     const reaction = actor.isGonyani ? '…' : '♪';
@@ -238,14 +251,33 @@ function initApp() {
   }
 
   function takeScenePhoto() {
-    if (graphics.isContextLost()) {
+    if (!residentPhoto && graphics.isContextLost()) {
       showToast('写真を保存できませんでした');
       return;
     }
-    renderPipeline();
+    if (!residentPhoto) renderPipeline();
     const now = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
-    downloadFile('ganadi-photo_' + now + '.png', canvas.toDataURL('image/png'));
+    const prefix = residentPhoto ? 'ganadi-bench-photo_' : 'ganadi-photo_';
+    downloadFile(prefix + now + '.png', residentPhoto || canvas.toDataURL('image/png'));
+    residentPhoto = null;
+    scenePhotoButton.textContent = '📷 写真';
+    scenePhotoButton.title = '広場やスタジオを背景ごとPNGで保存';
     showToast('📷 写真を保存しました');
+  }
+
+  function captureBenchPhoto() {
+    if (graphics.isContextLost()) return;
+    const wasVisible = plaza.resident.visible;
+    plaza.resident.visible = false;
+    try {
+      renderPipeline(benchPhoto.view(camera.aspect));
+      residentPhoto = canvas.toDataURL('image/png');
+    } finally {
+      plaza.resident.visible = wasVisible;
+    }
+    scenePhotoButton.textContent = '📷 保存';
+    scenePhotoButton.title = 'ゴンニョンイが撮った写真をPNGで保存';
+    showToast('📸 撮れました。「保存」でダウンロード');
   }
 
   function setQuadMode(enabled, notify = true) {
@@ -302,6 +334,8 @@ function initApp() {
     }
     cancelCheekNuzzle();
     cancelSnackTime();
+    cancelBenchPhoto();
+    sharedNap.reset();
     idleExchange.reset();
     if (player.onGround) {
       player.vel.y = 7.8;
@@ -314,6 +348,7 @@ function initApp() {
     dismissCompanion();
     const character = player.isGonyani ? CHARACTERS.ganadi : CHARACTERS.gonyani;
     companion = new StudioCharacter(character, characterAssets[character.id], worldScene, charScene, false, appState.styleMode);
+    companion.evening = appState.evening;
     companion.pos.copy(position);
     companion.yaw = appState.yawDeg * RAD;
     companion.setVisible(appState.mode === 'world');
@@ -327,6 +362,9 @@ function initApp() {
     if (!companion) return;
     cancelCheekNuzzle();
     cancelSnackTime();
+    cancelBenchPhoto();
+    sharedNap.reset();
+    waryStep.reset();
     idleExchange.reset();
     if (benchClimb.hasRider(companion)) cancelBenchClimb();
     companion.dispose(worldScene, charScene);
@@ -484,10 +522,34 @@ function initApp() {
     finishCheekNuzzle();
   }
 
+  function startBenchPhoto() {
+    if (appState.mode !== 'world' || !companion || benchPhoto.active) return;
+    visitPlazaSpot('bench');
+    if (companionBeat) companion.setEmote('normal');
+    companionBeat = null;
+    setBubble(null);
+    setPlazaReply(null);
+    benchPhoto.start(player, companion);
+    plazaState.focus.point.z = plaza.bench.position.z + 2.55;
+    plazaState.focus.centerY = 2.75;
+    plazaState.focus.companion.copy(companion.pos);
+    framePlazaFocus();
+    syncPlazaAction();
+  }
+
+  function cancelBenchPhoto() {
+    if (!benchPhoto.active) return;
+    benchPhoto.stop();
+    plazaState.focus = null;
+  }
+
   function cancelPlazaInteraction() {
     cancelBenchClimb();
     cancelCheekNuzzle();
     cancelSnackTime();
+    cancelBenchPhoto();
+    sharedNap.reset();
+    waryStep.reset();
     idleExchange.reset();
   }
 
@@ -504,7 +566,7 @@ function initApp() {
   }
 
   function getPlazaAction() {
-    if (appState.mode !== 'world' || cheekNuzzle.active) return null;
+    if (appState.mode !== 'world' || cheekNuzzle.active || benchPhoto.active) return null;
     if (benchClimb.active) return benchClimb.seated ? 'dismount' : null;
     const table = plaza.snackTable.position;
     const snackDistance = Math.hypot(player.pos.x - table.x, player.pos.z - table.z);
@@ -515,10 +577,12 @@ function initApp() {
     if (canClimb && player.onGround && benchDistance <= BENCH_REACH
       && (snackDistance > 1.95 || benchDistance < snackDistance)) return 'climb';
     if (snackDistance <= 1.95) return 'snack';
-    return cheekNuzzle.canStart(player, companion) ? 'cheek' : null;
+    return !companion?.sharedNap && !companion?.waryStep && cheekNuzzle.canStart(player, companion) ? 'cheek' : null;
   }
 
   function syncPlazaAction() {
+    benchPhotoButton?.classList.toggle('hidden', !companion || benchPhoto.active);
+    viewportWrap.classList.toggle('bench-perch', benchClimb.active);
     const action = getPlazaAction();
     const labels = {
       climb: 'のぼる', dismount: 'おりる',
@@ -588,6 +652,7 @@ function initApp() {
       : ['normal', 'happy', 'hug', 'du', 'fierce', 'angel', 'devil', 'rose'];
     for (let i = 0; i < num; i++) {
       const npc = new StudioCharacter(character, characterAssets[character.id], worldScene, charScene, false, appState.styleMode);
+      npc.evening = appState.evening;
       const ang = Math.random() * Math.PI * 2;
       const dist = 2.0 + Math.random() * 5.2;
       npc.pos.set(
@@ -699,7 +764,9 @@ function initApp() {
     setFormMenu(false);
     const isWorld = mode === 'world';
     viewportWrap.classList.toggle('world-mode', isWorld);
-    world.setMode(mode);
+    world.setMode(mode, appState.evening);
+    graphics.setEvening(isWorld && appState.evening);
+    footprints.setVisible(isWorld);
     crowd.forEach((npc) => npc.setVisible(isWorld));
     companion?.setVisible(isWorld);
 
@@ -769,10 +836,21 @@ function initApp() {
     syncPlazaAction();
   });
   document.getElementById('btnVisitBench').addEventListener('click', () => visitPlazaSpot('bench'));
+  benchPhotoButton?.addEventListener('click', startBenchPhoto);
   document.getElementById('btnVisitSnack').addEventListener('click', () => visitPlazaSpot('snack'));
+  eveningButton?.addEventListener('click', () => {
+    appState.evening = !appState.evening;
+    eveningButton.setAttribute('aria-pressed', String(appState.evening));
+    const isWorld = appState.mode === 'world';
+    world.setEvening(isWorld, appState.evening);
+    graphics.setEvening(isWorld && appState.evening);
+    for (const actor of [...Object.values(players), companion, ...crowd]) {
+      if (actor) actor.evening = appState.evening;
+    }
+  });
   plazaActionButton.addEventListener('click', usePlazaAction);
   document.getElementById('btnPet').addEventListener('click', () => petActor(player));
-  document.getElementById('btnScenePhoto').addEventListener('click', takeScenePhoto);
+  scenePhotoButton.addEventListener('click', takeScenePhoto);
   document.getElementById('btnStyleBiped').addEventListener('click', () => setQuadMode(false));
   document.getElementById('btnStyleQuad').addEventListener('click', () => setQuadMode(true));
 
@@ -981,7 +1059,7 @@ function initApp() {
     const oldAttention = plazaState.attention;
     const near = Math.hypot(dx, dz) < BENCH_REACH + (oldAttention > 0 ? .3 : 0);
     plazaState.attention = near ? oldAttention + dt : 0;
-    const lookingUp = benchClimb.active || plazaState.attention > .24 || snackTime.active;
+    const lookingUp = benchClimb.active || plazaState.attention > .24 || snackTime.active || benchPhoto.active;
     const turn = lookingUp && !benchClimb.active ? clamp(Math.atan2(dx, dz), -.58, .58) : 0;
     const nod = snackTime.active ? .035 * Math.sin(timeSec * 7) : 0;
     const follow = Math.min(1, dt * 6);
@@ -991,8 +1069,8 @@ function initApp() {
     plaza.head.rotation.z += (-.07 * reaction - plaza.head.rotation.z) * follow;
     const heldPhonePitch = lookingUp ? -1.36 - .15 * reaction : -1.1;
     const phonePitch = THREE.MathUtils.lerp(heldPhonePitch, -Math.PI / 2, snackTime.phoneDown);
-    plaza.phone.rotation.x += (phonePitch - plaza.phone.rotation.x) * follow;
-    if (!benchClimb.active && !cheekNuzzle.active && !snackTime.active
+    if (!benchPhoto.active) plaza.phone.rotation.x += (phonePitch - plaza.phone.rotation.x) * follow;
+    if (!benchClimb.active && !cheekNuzzle.active && !snackTime.active && !benchPhoto.active
       && oldAttention < .65 && plazaState.attention >= .65 && !plazaReply) {
       setPlazaReply('resident', '…', 1.7);
     }
@@ -1005,7 +1083,12 @@ function initApp() {
       companion.updateAnimation(dt, 0, false, false, benchClimb.isSeated(companion));
       return;
     }
-    if (cheekNuzzle.active || snackTime.active) {
+    if (cheekNuzzle.active || snackTime.active || benchPhoto.active || companion.sharedNap) {
+      companion.updateAnimation(dt, 0, false, false);
+      return;
+    }
+    if (companion.waryStep) {
+      interactWithWorld(companion, dt, false);
       companion.updateAnimation(dt, 0, false, false);
       return;
     }
@@ -1101,7 +1184,10 @@ function initApp() {
     if (!isStudio) {
       const climbing = benchClimb.active;
       const nuzzling = cheekNuzzle.active;
-      const { moving, sprinting } = movePlayer(player, appState, climbing || nuzzling ? 0 : dt);
+      const photographing = benchPhoto.active;
+      const staged = climbing || nuzzling || photographing;
+      const { moving, sprinting } = movePlayer(player, appState, staged ? 0 : dt);
+      let shutter = false;
       if (climbing) {
         if (moving) benchClimb.dismount();
         benchClimb.update(dt);
@@ -1115,8 +1201,15 @@ function initApp() {
           else setPlazaReply('companion', '…', 1.25);
         }
         if (!cheekNuzzle.active) finishCheekNuzzle();
+      } else if (photographing && !moving) {
+        shutter = benchPhoto.update(dt);
+        if (!benchPhoto.active) {
+          // Keep the two-shot framing until the player moves again.
+          plazaState.focus.companion.copy(companion.pos);
+        }
       } else {
         if (nuzzling) cancelCheekNuzzle();
+        if (photographing) cancelBenchPhoto();
         if (moving) {
           cancelSnackTime();
           plazaState.focus = null;
@@ -1124,7 +1217,13 @@ function initApp() {
         interactWithWorld(player, dt, true);
       }
       const speed = Math.hypot(player.vel.x, player.vel.z);
-      const settled = !moving && speed < .16 && !isDraggingCanvas && !plazaState.focus && !companionBeat
+      const freePlay = !staged && !snackTime.active && !companionBeat;
+      const quiet = !moving && speed < .16;
+      sharedNap.update(player, companion, dt, freePlay && quiet);
+      waryStep.update(player, companion, dt, moving, freePlay && !plazaState.focus
+        && !companion?.sharedNap && player.activeEmote === 'normal' && companion?.activeEmote === 'normal');
+      const settled = freePlay && quiet && !isDraggingCanvas && !plazaState.focus
+        && !companion?.waryStep && !companion?.sharedNap
         && companion && companion.pos.distanceToSquared(companionSpot(companionGoal)) <= .35 ** 2;
       idleExchange.update(player, companion, dt, settled);
       if (snackTime.active) {
@@ -1133,12 +1232,17 @@ function initApp() {
       if (player.updateAnimation(dt, speed, !climbing && sprinting, false, benchClimb.isSeated(player))) updateStatus();
       updatePlaza(dt, timeSec);
       updateCompanion(dt);
+      if (shutter) captureBenchPhoto();
 
       updateCrowd(player, companion, crowd, ballState, interactWithWorld, dt);
+      footprints.step(player, moving && !staged);
+      footprints.step(companion, !staged && (companion?.renderPose === 'walk' || companion?.renderPose === 'run'));
+      for (const npc of crowd) footprints.step(npc, npc.renderPose === 'walk' || npc.renderPose === 'run');
       world.updateProps(dt, timeSec);
     } else {
       player.updateAnimation(dt, 0, false, true);
     }
+    footprints.update(dt);
 
     // Orbit Camera Update
     const studioHeight = player.floorPose ? .72 : (player.renderPose === 'mochi' ? .99 : 1.15);

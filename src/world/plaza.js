@@ -74,8 +74,10 @@ export function buildPlaza(worldPropsGroup, mats) {
   resident.add(phone);
   const heldPhone = phone.position.clone();
   const benchPhone = new THREE.Vector3(-.69, .027, .17);
+  const raisedPhone = new THREE.Vector3(0, 1.06, .94);
   const lowerPhoneArm = reachArm(arms[0], new THREE.Vector3(-.34, .76, .39), new THREE.Vector3(-.62, .13, .21));
   const reachForCake = reachArm(arms[1], new THREE.Vector3(.34, .76, .39), new THREE.Vector3(.69, .17, .12));
+  const raisePhoneArm = reachArm(arms[1], new THREE.Vector3(.34, .78, .41), new THREE.Vector3(.10, .97, .92));
 
   function reachArm(arm, shoulder, paw) {
     const rest = arm.position.clone();
@@ -95,6 +97,12 @@ export function buildPlaza(worldPropsGroup, mats) {
     phone.position.lerpVectors(heldPhone, benchPhone, phoneDown);
     lowerPhoneArm(phoneDown);
     reachForCake(reach);
+  }
+
+  function poseResidentPhoto(amount) {
+    phone.position.lerpVectors(heldPhone, raisedPhone, amount);
+    phone.rotation.x = THREE.MathUtils.lerp(-1.36, -.43, amount);
+    raisePhoneArm(amount);
   }
 
   const head = new THREE.Group();
@@ -173,6 +181,6 @@ export function buildPlaza(worldPropsGroup, mats) {
   const snackFood = { left: left.food, right: right.food, resident: residentSnack.food };
   return {
     bench, resident, head, headPerches, phone, snackTable, center,
-    left: left.dish, right: right.dish, residentSnack: residentSnack.dish, snackFood, poseResidentSnack,
+    left: left.dish, right: right.dish, residentSnack: residentSnack.dish, snackFood, poseResidentSnack, poseResidentPhoto,
   };
 }
