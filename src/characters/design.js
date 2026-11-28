@@ -27,6 +27,7 @@ const GANADI_EMOTES = [
   { id: 'prone',  label: 'ぺたん',         icon: '🐾', face: 'normal', pose: 'prone', form: true },
   { id: 'roll',   label: 'ごろん',         icon: '☁️', face: 'normal', pose: 'roll', form: true },
   { id: 'mochi',  label: 'もちもち',       icon: '🍡', face: 'normal', pose: 'mochi', form: true },
+  { id: 'bun',    label: 'ガナディまん',   icon: '♨️', face: 'normal', pose: 'bun',   form: true },
 ];
 const GONYANI_EMOTES = [
   { id: 'normal', label: '通常',           icon: '🐱', face: 'gonyani-normal', pose: 'idle',   key: '1' },
