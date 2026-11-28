@@ -2,7 +2,7 @@ import { THREE } from './three.js';
 import { MAX_CAMERA_DISTANCE, RAD, WORLD_HALF, clamp } from './math.js?v=2';
 import { playSfx, toggleAudio } from './audio.js';
 import { CHARACTERS, FLOOR_POSES } from './characters/design.js?v=2';
-import { buildSharedAssets, buildGonyaniAssets } from './characters/assets.js?v=2';
+import { buildSharedAssets, buildGonyaniAssets } from './characters/assets.js?v=3';
 import { StudioCharacter } from './characters/character.js?v=13';
 import { globalRenderUniforms } from './graphics/materials.js';
 import { createRenderPipeline } from './graphics/renderer.js?v=10';

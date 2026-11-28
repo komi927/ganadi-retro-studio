@@ -14,19 +14,19 @@ function buildBunGeometry(flat) {
   shape.moveTo(-11.7, .7);
   shape.bezierCurveTo(-7.7, -.25, 3.7, -.15, 9.9, 1.5);
   shape.bezierCurveTo(14.5, 2.5, 16.2, 4.5, 16.1, 8.0);
-  shape.bezierCurveTo(16.1, 11.5, 15.7, 14.9, 13.3, 16.6);
-  shape.bezierCurveTo(15.9, 16.5, 17.8, 18.3, 17.2, 20.2);
-  shape.bezierCurveTo(16.4, 22.2, 12.0, 23.9, 8.5, 22.6);
+  shape.bezierCurveTo(16.1, 11.5, 16.1, 15.2, 14.4, 16.7);
+  shape.bezierCurveTo(17.0, 16.6, 18.8, 18.4, 17.9, 20.2);
+  shape.bezierCurveTo(16.9, 22.2, 12.3, 23.6, 8.5, 22.6);
   shape.bezierCurveTo(6.9, 22.8, 5.5, 23.7, 4.5, 25.3);
   shape.bezierCurveTo(3.2, 27.5, 2.2, 27.5, .8, 25.8);
   shape.bezierCurveTo(-.9, 26.0, -2.6, 26.8, -3.6, 24.5);
   shape.bezierCurveTo(-4.2, 23.5, -5.6, 23.4, -6.8, 22.3);
-  shape.bezierCurveTo(-9.3, 24.4, -15.4, 23.2, -17.1, 20.6);
-  shape.bezierCurveTo(-18.1, 18.7, -16.6, 15.7, -12.0, 16.0);
-  shape.bezierCurveTo(-14.5, 14.7, -16.3, 10.7, -16.1, 6.9);
+  shape.bezierCurveTo(-9.8, 24.1, -15.9, 23.1, -17.8, 20.6);
+  shape.bezierCurveTo(-19.2, 18.7, -17.0, 16.1, -13.6, 16.3);
+  shape.bezierCurveTo(-15.2, 15.1, -16.3, 10.7, -16.1, 6.9);
   shape.bezierCurveTo(-16.2, 3.6, -14.9, 1.4, -11.7, .7);
   // 耳の付け根で断面同士が交差しない高さを縮小の中心にする。
-  const centerY = 16.5;
+  const centerY = 15.7;
   const profile = shape.getPoints(flat ? 3 : 6).slice(0, -1)
     .map(({ x, y }) => [x, -(y - centerY)]);
 
