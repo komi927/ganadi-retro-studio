@@ -1,7 +1,7 @@
 import { THREE } from '../three.js';
 import { S, RAD, clamp } from '../math.js';
 import { HEAD_LOCAL_CY, HEAD_PIVOT_Y, HEAD_RY, FLOOR_POSES } from './design.js';
-import { getFaceMaterial } from './faces.js';
+import { getFaceMaterial } from './faces.js?v=7';
 
 const BIPED_POSES = new Set(['sit', 'bow', 'perch', 'cheek']);
 
@@ -302,6 +302,8 @@ export class StudioCharacter {
     this.emoteAge = 0;
     this.petFor = 0;
     this.cheekLean = null;
+    this.idleGlance = 0;
+    this.snackGesture = null;
     this.floorPose = false;
     this.renderPose = 'idle';
     this.animPhase = Math.random() * 10;
@@ -460,6 +462,11 @@ export class StudioCharacter {
       earLFlap = Math.sin(t) * 0.05;
       earRFlap = Math.sin(t) * 0.05;
       if (finishedBow) this.setFace('normal');
+      if (this.isGonyani && this.idleGlance) {
+        this.setFace(this.idleGlance < 0 ? 'gonyani-glance-left' : 'gonyani-glance-right');
+      } else if (!this.isGonyani) {
+        headYaw += this.idleGlance;
+      }
     } else if (pose === 'stare') {
       headYaw = .14;
       tailWag = Math.sin(t * .7) * .08;
@@ -601,6 +608,15 @@ export class StudioCharacter {
         footSpread = .053;
         footForward = .19;
         footLift = .016;
+        if (this.snackGesture) {
+          const { side, look, reach, chew } = this.snackGesture;
+          bodyPitch += .13 * reach;
+          headYaw = side * (.13 + .26 * look);
+          headPitch += .25 * look + .12 * reach + .045 * chew;
+          if (side < 0) armLP -= .83 * reach;
+          else armRP -= .83 * reach;
+          if (this.isGonyani) this.setFace('gonyani-normal');
+        }
       }
       tailWag = Math.sin(t * 1.6) * 0.34;
     } else if (pose === 'bow') {

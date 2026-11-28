@@ -3,12 +3,13 @@ import { MAX_CAMERA_DISTANCE, RAD, WORLD_HALF, clamp } from './math.js?v=2';
 import { playSfx, toggleAudio } from './audio.js';
 import { CHARACTERS, FLOOR_POSES } from './characters/design.js';
 import { buildSharedAssets, buildGonyaniAssets } from './characters/assets.js';
-import { StudioCharacter } from './characters/character.js?v=6';
+import { StudioCharacter } from './characters/character.js?v=7';
 import { globalRenderUniforms } from './graphics/materials.js';
 import { createRenderPipeline } from './graphics/renderer.js';
-import { createWorld } from './world/scene.js?v=2';
+import { createWorld } from './world/scene.js?v=7';
 import { BENCH_REACH, createBenchClimb } from './world/bench-climb.js?v=2';
 import { createCheekNuzzle } from './world/cheek-nuzzle.js?v=3';
+import { createIdleExchange, createSnackTime } from './world/plaza-moments.js?v=7';
 import { createWorldInteractions, movePlayer, updateCrowd } from './world/physics.js';
 import { createTransparentPng } from './export/png.js';
 import { buildCharacterGlb } from './export/glb.js';
@@ -27,6 +28,8 @@ function initApp() {
   const { worldPropsGroup, treeOccluders, plaza, ballState, spawnRiceSparkles } = world;
   const benchClimb = createBenchClimb(plaza);
   const cheekNuzzle = createCheekNuzzle();
+  const idleExchange = createIdleExchange();
+  const snackTime = createSnackTime(plaza);
 
   // ---- PLAYABLE CHARACTERS & AUTONOMOUS CROWD ----
   const characterAssets = { ganadi: assets, gonyani: buildGonyaniAssets(assets) };
@@ -40,7 +43,7 @@ function initApp() {
   let companion = null;
   let companionBeat = null;
   let plazaReply = null;
-  const plazaState = { snack: 0, servingFor: 0, attention: 0, focus: null };
+  const plazaState = { snack: 0, attention: 0, focus: null };
   const snackActions = ['🍓 いちごをのせる', '🍰 おやつを分ける', '↺ もう一度つくる'];
   const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
 
@@ -221,6 +224,8 @@ function initApp() {
 
   function petActor(actor) {
     cancelCheekNuzzle();
+    cancelSnackTime();
+    idleExchange.reset();
     actor.petFor = 1.4;
     const reaction = actor.isGonyani ? '…' : '♪';
     if (actor === player) {
@@ -296,6 +301,8 @@ function initApp() {
       return;
     }
     cancelCheekNuzzle();
+    cancelSnackTime();
+    idleExchange.reset();
     if (player.onGround) {
       player.vel.y = 7.8;
       player.onGround = false;
@@ -319,6 +326,8 @@ function initApp() {
   function dismissCompanion() {
     if (!companion) return;
     cancelCheekNuzzle();
+    cancelSnackTime();
+    idleExchange.reset();
     if (benchClimb.hasRider(companion)) cancelBenchClimb();
     companion.dispose(worldScene, charScene);
     companion = null;
@@ -351,6 +360,12 @@ function initApp() {
       0,
       clamp(player.pos.z + dz * side, -edge, edge)
     );
+  }
+
+  function fitCompanionView() {
+    if (plazaState.focus || camera.aspect >= 1) return;
+    const horizontalSpan = 2 * Math.tan(camera.fov * RAD / 2) * camera.aspect;
+    appState.distance = clamp(Math.max(appState.distance, 3.85 / horizontalSpan), 4, MAX_CAMERA_DISTANCE);
   }
 
   function visitPlazaSpot(spot) {
@@ -389,11 +404,13 @@ function initApp() {
   }
 
   function startBenchClimb() {
+    cancelSnackTime();
+    idleExchange.reset();
     releaseHeldControls();
     setBubble(null);
     setPlazaReply(null);
     if (companion) {
-      if (companionBeat || plazaState.servingFor > 0) companion.setEmote('normal');
+      if (companionBeat) companion.setEmote('normal');
       companionBeat = null;
     }
     benchClimb.start(player, companion);
@@ -434,10 +451,12 @@ function initApp() {
   }
 
   function startCheekNuzzle() {
+    cancelSnackTime();
+    idleExchange.reset();
     releaseHeldControls();
     setBubble(null);
     setPlazaReply(null);
-    if (companionBeat || plazaState.servingFor > 0) companion.setEmote('normal');
+    if (companionBeat) companion.setEmote('normal');
     companionBeat = null;
     const { yaw, center } = cheekNuzzle.start(player, companion, appState.yawDeg * RAD);
     plazaState.focus = {
@@ -468,12 +487,17 @@ function initApp() {
   function cancelPlazaInteraction() {
     cancelBenchClimb();
     cancelCheekNuzzle();
+    cancelSnackTime();
+    idleExchange.reset();
   }
 
   function setSnackStage(stage) {
     plazaState.snack = stage;
     plaza.center.topping.visible = stage >= 1;
     plaza.left.visible = plaza.right.visible = plaza.residentSnack.visible = stage === 2;
+    if (stage === 0) {
+      for (const food of Object.values(plaza.snackFood)) food.visible = true;
+    }
     syncPlazaAction();
   }
 
@@ -514,28 +538,49 @@ function initApp() {
 
   function serveSnack() {
     const stage = (plazaState.snack + 1) % 3;
-    setSnackStage(stage);
     if (stage === 0) {
-      plazaState.servingFor = 0;
-      if (companion?.activeEmote === 'sit') companion.setEmote('normal');
+      cancelSnackTime();
       if (plazaReply?.speaker === 'resident') setPlazaReply(null);
-      return;
     }
+    setSnackStage(stage);
+    if (stage === 0) return;
     const table = plaza.snackTable.position;
     spawnRiceSparkles(table);
-    playSfx('eat');
-    if (stage === 1) return;
+    if (stage === 1) {
+      playSfx('eat');
+      return;
+    }
 
     visitPlazaSpot('snack');
-    plazaState.servingFor = 4.8;
     if (!companion) createCompanion(plazaState.focus.companion);
     companionBeat = null;
+    player.yaw = -.36;
+    companion.yaw = .36;
     companion.setEmote('sit');
     player.setEmote('sit');
-    setBubble(player.isGonyani ? '…' : 'もぐ もぐ', 3.2);
-    setPlazaReply('resident', '…ありがとう', 3.3);
+    setBubble(null);
+    setPlazaReply(null);
+    snackTime.start(player, companion);
     updateEmoteUI();
     updateStatus();
+  }
+
+  function handleSnackBite(role, actor) {
+    playSfx('eat');
+    if (role === 'ganadi') {
+      if (actor === player) setBubble('もぐ もぐ', 1.25);
+      else setPlazaReply('companion', 'もぐ もぐ', 1.25);
+    } else if (role === 'resident') {
+      setPlazaReply('resident', '…ありがとう', 1.9);
+    }
+  }
+
+  function cancelSnackTime() {
+    if (!snackTime.active) return;
+    snackTime.stop();
+    if (companion?.activeEmote === 'sit') companion.setEmote('normal');
+    setBubble(null);
+    setPlazaReply(null);
   }
 
   function spawnCrowd(num = 5) {
@@ -649,7 +694,6 @@ function initApp() {
     releaseHeldControls();
     plazaState.focus = null;
     plazaState.attention = 0;
-    plazaState.servingFor = 0;
     companionBeat = null;
     companion?.setEmote('normal');
     setBubble(null);
@@ -675,6 +719,7 @@ function initApp() {
     } else {
       appState.distance = isPortrait ? 11.2 : 10.0;
       appState.pitchDeg = 22;
+      if (companion) fitCompanionView();
     }
 
     document.getElementById('crowdPanel').classList.toggle('hidden', !isWorld);
@@ -721,6 +766,7 @@ function initApp() {
       dismissCompanion();
     } else {
       createCompanion(companionSpot(new THREE.Vector3()));
+      fitCompanionView();
     }
     syncPlazaAction();
   });
@@ -937,21 +983,20 @@ function initApp() {
     const oldAttention = plazaState.attention;
     const near = Math.hypot(dx, dz) < BENCH_REACH + (oldAttention > 0 ? .3 : 0);
     plazaState.attention = near ? oldAttention + dt : 0;
-    const lookingUp = benchClimb.active || plazaState.attention > .24 || plazaState.servingFor > 0;
+    const lookingUp = benchClimb.active || plazaState.attention > .24 || snackTime.active;
     const turn = lookingUp && !benchClimb.active ? clamp(Math.atan2(dx, dz), -.58, .58) : 0;
-    const nod = plazaState.servingFor > 0 ? .055 * Math.sin(timeSec * 9) : 0;
+    const nod = snackTime.active ? .035 * Math.sin(timeSec * 7) : 0;
     const follow = Math.min(1, dt * 6);
     const reaction = benchClimb.reaction;
     plaza.head.rotation.y += (turn - plaza.head.rotation.y) * follow;
     plaza.head.rotation.x += ((lookingUp ? -.045 + nod - .12 * reaction : .22) - plaza.head.rotation.x) * follow;
     plaza.head.rotation.z += (-.07 * reaction - plaza.head.rotation.z) * follow;
-    plaza.phone.rotation.x += ((lookingUp ? -1.36 - .15 * reaction : -1.1) - plaza.phone.rotation.x) * follow;
-    if (!benchClimb.active && !cheekNuzzle.active && oldAttention < .65 && plazaState.attention >= .65 && !plazaReply) {
+    const heldPhonePitch = lookingUp ? -1.36 - .15 * reaction : -1.1;
+    const phonePitch = THREE.MathUtils.lerp(heldPhonePitch, -Math.PI / 2, snackTime.phoneDown);
+    plaza.phone.rotation.x += (phonePitch - plaza.phone.rotation.x) * follow;
+    if (!benchClimb.active && !cheekNuzzle.active && !snackTime.active
+      && oldAttention < .65 && plazaState.attention >= .65 && !plazaReply) {
       setPlazaReply('resident', '…', 1.7);
-    }
-    if (plazaState.servingFor > 0) {
-      plazaState.servingFor = Math.max(0, plazaState.servingFor - dt);
-      if (plazaState.servingFor === 0 && companion?.activeEmote === 'sit') companion.setEmote('normal');
     }
     syncPlazaAction();
   }
@@ -962,7 +1007,7 @@ function initApp() {
       companion.updateAnimation(dt, 0, false, false, benchClimb.isSeated(companion));
       return;
     }
-    if (cheekNuzzle.active) {
+    if (cheekNuzzle.active || snackTime.active) {
       companion.updateAnimation(dt, 0, false, false);
       return;
     }
@@ -986,11 +1031,10 @@ function initApp() {
       }
     }
 
-    const atTable = plazaState.servingFor > 0 && near;
     let speed = 0;
     const viewYaw = appState.yawDeg * RAD;
     let aim = viewYaw;
-    if ((companionBeat && near) || atTable) {
+    if (companionBeat && near) {
       const sideLook = THREE.MathUtils.euclideanModulo(Math.atan2(dx, dz) - viewYaw + Math.PI, 2 * Math.PI) - Math.PI;
       aim += clamp(sideLook, -.68, .68);
     } else {
@@ -1075,10 +1119,20 @@ function initApp() {
         if (!cheekNuzzle.active) finishCheekNuzzle();
       } else {
         if (nuzzling) cancelCheekNuzzle();
-        if (moving) plazaState.focus = null;
+        if (moving) {
+          cancelSnackTime();
+          plazaState.focus = null;
+        }
         interactWithWorld(player, dt, true);
       }
       const speed = Math.hypot(player.vel.x, player.vel.z);
+      const settled = !moving && speed < .16 && !isDraggingCanvas && !plazaState.focus && !companionBeat
+        && companion && companion.pos.distanceToSquared(companionSpot(companionGoal)) <= .35 ** 2;
+      idleExchange.update(player, companion, dt, settled);
+      if (snackTime.active) {
+        snackTime.update(dt, handleSnackBite);
+        if (!snackTime.active && companion?.activeEmote === 'sit') companion.setEmote('normal');
+      }
       if (player.updateAnimation(dt, speed, !climbing && sprinting, false, benchClimb.isSeated(player))) updateStatus();
       updatePlaza(dt, timeSec);
       updateCompanion(dt);
@@ -1099,8 +1153,8 @@ function initApp() {
       focus.x += 1.12;
     }
     if (!isStudio && !plazaState.focus && companion && companion.pos.distanceTo(player.pos) < 2.7) {
-      focus.x += (companion.pos.x - player.pos.x) * .34;
-      focus.z += (companion.pos.z - player.pos.z) * .34;
+      focus.x += (companion.pos.x - player.pos.x) * .5;
+      focus.z += (companion.pos.z - player.pos.z) * .5;
     }
     camTarget.lerp(focus, Math.min(1, dt * 8));
 

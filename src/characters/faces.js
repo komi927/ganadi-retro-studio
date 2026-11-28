@@ -88,6 +88,7 @@ export function getFaceMaterial(faceId, style) {
   if (faceId.startsWith('gonyani-')) {
     const wary = faceId === 'gonyani-wary';
     const staring = faceId === 'gonyani-stare';
+    const glance = faceId === 'gonyani-glance-left' ? -1 : faceId === 'gonyani-glance-right' ? 1 : 0;
     if (faceId === 'gonyani-sleep') {
       stroke('M6.5 33 Q13.5 40 21 33 M43 33 Q50.5 40 57.5 33', 2.8);
     } else {
@@ -100,7 +101,7 @@ export function getFaceMaterial(faceId, style) {
         ctx.fillStyle = INK;
         ctx.fill(eye);
         ctx.clip(eye);
-        ctx.translate(staring ? side * 1.7 : 0, 0);
+        ctx.translate(side * (staring ? 1.7 : glance * 4.25), 0);
         filled('M-5.9 -6.4 C-9 -4.9 -9.9 -1.2 -8.9 2.2 Q-8.2 5.7 -5.2 6.5 Q-7.6 .6 -5.9 -6.4Z', WHITE);
         filled('M4.8 -6.5 C8 -5.0 9.7 -1.9 9.2 1.8 Q8.8 5.2 5.6 6.6 Q6.9 .9 4.8 -6.5Z', WHITE);
         ctx.restore();

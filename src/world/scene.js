@@ -3,7 +3,7 @@ import { S, WORLD_HALF, clamp } from '../math.js';
 import { OCT_SQUIRCLE, createLowPolyLathe } from '../characters/geometry.js';
 import { playSfx } from '../audio.js';
 import { createCelMaterial, ensureFlatNormalAttribute } from '../graphics/materials.js';
-import { buildPlaza } from './plaza.js?v=2';
+import { buildPlaza } from './plaza.js?v=7';
 
 export function createWorld(worldScene, charScene, mats) {
   // ---- SKY GRADIENT DOME (World Scene) ----

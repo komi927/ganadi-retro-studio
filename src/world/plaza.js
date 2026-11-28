@@ -48,12 +48,14 @@ export function buildPlaza(worldPropsGroup, mats) {
   resident.scale.setScalar(2.45);
   bench.add(resident);
   scaled(resident, round, dinoSkin, 0, .52, -.06, .58, .64, .52);
+  const arms = [];
   for (const side of [-1, 1]) {
     const thigh = scaled(resident, round, dinoSkin, side * .36, .16, .32, .26, .26, .44);
     thigh.rotation.y = side * .23;
     scaled(resident, round, dinoSkin, side * .43, -.10, .59, .22, .19, .33);
     const arm = scaled(resident, round, dinoSkin, side * .36, .74, .44, .17, .14, .29);
     arm.rotation.y = -side * .56;
+    arms.push(arm);
   }
   const tail = createLowPolyLathe([
     { y: 0, sx: 1, sz: 1 },
@@ -70,6 +72,30 @@ export function buildPlaza(worldPropsGroup, mats) {
   scaled(phone, box, ink, 0, 0, 0, .25, .39, .042);
   scaled(phone, box, screenMat, 0, .008, -.024, .207, .31, .009);
   resident.add(phone);
+  const heldPhone = phone.position.clone();
+  const benchPhone = new THREE.Vector3(-.69, .027, .17);
+  const lowerPhoneArm = reachArm(arms[0], new THREE.Vector3(-.34, .76, .39), new THREE.Vector3(-.62, .13, .21));
+  const reachForCake = reachArm(arms[1], new THREE.Vector3(.34, .76, .39), new THREE.Vector3(.69, .17, .12));
+
+  function reachArm(arm, shoulder, paw) {
+    const rest = arm.position.clone();
+    const restRotation = arm.quaternion.clone();
+    const center = shoulder.clone().lerp(paw, .5);
+    const direction = paw.clone().sub(shoulder);
+    const length = direction.length() * .54;
+    const rotation = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), direction.normalize());
+    return (amount) => {
+      arm.position.lerpVectors(rest, center, amount);
+      arm.quaternion.copy(restRotation).slerp(rotation, amount);
+      arm.scale.z = THREE.MathUtils.lerp(.29, length, amount);
+    };
+  }
+
+  function poseResidentSnack(phoneDown, reach) {
+    phone.position.lerpVectors(heldPhone, benchPhone, phoneDown);
+    lowerPhoneArm(phoneDown);
+    reachForCake(reach);
+  }
 
   const head = new THREE.Group();
   head.position.set(0, 1.32, -.01);
@@ -129,18 +155,24 @@ export function buildPlaza(worldPropsGroup, mats) {
     dish.position.set(x, y, z);
     group.add(dish);
     part(dish, plate, mats.bowlBlue, 0, .018, 0);
-    part(dish, cup, dough, 0, .112, 0);
-    scaled(dish, round, cream, 0, .22, 0, .165, .095, .165);
-    scaled(dish, round, cream, 0, .277, 0, .107, .078, .108);
+    const food = new THREE.Group();
+    dish.add(food);
+    part(food, cup, dough, 0, .112, 0);
+    scaled(food, round, cream, 0, .22, 0, .165, .095, .165);
+    scaled(food, round, cream, 0, .277, 0, .107, .078, .108);
     const topping = new THREE.Group();
     scaled(topping, berry, mats.roseRed, 0, .373, 0, .068, .096, .065).rotation.z = -.25;
     scaled(topping, round, mats.stemGreen, .02, .445, 0, .073, .018, .048);
-    dish.add(topping);
-    return { dish, topping };
+    food.add(topping);
+    return { dish, topping, food };
   }
   const center = cupcake(snackTable, 0, .81, .08);
-  const left = cupcake(snackTable, -.49, .81, -.14).dish;
-  const right = cupcake(snackTable, .49, .81, -.14).dish;
-  const residentSnack = cupcake(bench, 1.72, .75, .36).dish;
-  return { bench, resident, head, headPerches, phone, snackTable, center, left, right, residentSnack };
+  const left = cupcake(snackTable, -.49, .81, -.14);
+  const right = cupcake(snackTable, .49, .81, -.14);
+  const residentSnack = cupcake(bench, 1.72, .75, .36);
+  const snackFood = { left: left.food, right: right.food, resident: residentSnack.food };
+  return {
+    bench, resident, head, headPerches, phone, snackTable, center,
+    left: left.dish, right: right.dish, residentSnack: residentSnack.dish, snackFood, poseResidentSnack,
+  };
 }
