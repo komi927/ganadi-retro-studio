@@ -1,0 +1,4100 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>ガナディ 3Dドット・プレイグラウンド＆スタジオ</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+
+  <style id="ganadiCoreStyle">
+    :root {
+      --sat: env(safe-area-inset-top, 0px);
+      --sab: env(safe-area-inset-bottom, 0px);
+      --sal: env(safe-area-inset-left, 0px);
+      --sar: env(safe-area-inset-right, 0px);
+    }
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100dvh;
+      overflow: hidden;
+      overscroll-behavior: none;
+      touch-action: none;
+      font-family: 'M PLUS Rounded 1c', system-ui, -apple-system, sans-serif;
+      background: #d9f0ff;
+      color: #222532;
+    }
+    body {
+      display: flex;
+      flex-direction: row;
+      position: fixed;
+      inset: 0;
+    }
+    #viewportWrap {
+      position: relative;
+      flex: 1 1 auto;
+      width: 100%;
+      height: 100dvh;
+      overflow: hidden;
+    }
+    #webglCanvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+      touch-action: none;
+    }
+    .mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .pixel-card {
+      border: 2px solid #222532;
+      box-shadow: 0 3px 0 #222532;
+    }
+    .pixel-btn {
+      border: 2px solid #222532;
+      box-shadow: 0 3px 0 #222532;
+      transition: transform 0.08s ease, box-shadow 0.08s ease, background-color 0.12s ease, color 0.12s ease;
+      cursor: pointer;
+    }
+    .pixel-btn:active, .pixel-btn.pressed {
+      transform: translateY(2px);
+      box-shadow: 0 1px 0 #222532;
+    }
+    .pixel-btn.active {
+      background-color: #222532;
+      color: #ffffff;
+    }
+    .glass-panel {
+      background: rgba(255, 255, 253, 0.93);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+    }
+    .thin-scroll::-webkit-scrollbar {
+      width: 5px;
+      height: 5px;
+    }
+    .thin-scroll::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .thin-scroll::-webkit-scrollbar-thumb {
+      background: rgba(34, 37, 50, 0.22);
+      border-radius: 999px;
+    }
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+
+    /* Top HUD safe-area spacing */
+    #topHudBar {
+      top: calc(10px + var(--sat));
+      left: calc(10px + var(--sal));
+      right: calc(10px + var(--sar));
+    }
+    #hudInfoPill {
+      top: calc(58px + var(--sat));
+      left: calc(10px + var(--sal));
+    }
+
+    /* Floating Speech Bubble above Ganadi */
+    #speechBubble {
+      position: absolute;
+      pointer-events: none;
+      transform: translate(-50%, -100%);
+      transition: opacity 0.14s ease;
+      z-index: 20;
+      max-width: min(82vw, 280px);
+      text-align: center;
+    }
+    #speechBubble::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      bottom: -8px;
+      transform: translateX(-50%);
+      border-width: 8px 7px 0 7px;
+      border-style: solid;
+      border-color: #222532 transparent transparent transparent;
+    }
+    #speechBubble::before {
+      content: "";
+      position: absolute;
+      left: 50%;
+      bottom: -5px;
+      transform: translateX(-50%);
+      border-width: 6px 5px 0 5px;
+      border-style: solid;
+      border-color: #ffffff transparent transparent transparent;
+      z-index: 1;
+    }
+
+    /* ==================== VIRTUAL ANALOG JOYSTICK & TACTILE BUTTONS ==================== */
+    #virtualPad {
+      position: absolute;
+      left: calc(14px + var(--sal));
+      right: calc(14px + var(--sar));
+      bottom: calc(14px + var(--sab));
+      z-index: 26;
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      pointer-events: none;
+    }
+    #joyZone {
+      pointer-events: auto;
+      position: relative;
+      width: 118px;
+      height: 118px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      touch-action: none;
+    }
+    #joyBase {
+      position: relative;
+      width: 112px;
+      height: 112px;
+      border-radius: 9999px;
+      background: rgba(255, 255, 255, 0.56);
+      border: 2.5px solid rgba(34, 37, 50, 0.72);
+      box-shadow: inset 0 0 0 8px rgba(255, 255, 255, 0.35), 0 4px 12px rgba(34, 37, 50, 0.16);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: border-color 0.12s ease, box-shadow 0.12s ease;
+    }
+    #joyBase.auto-dash {
+      border-color: #ff5b8c;
+      box-shadow: 0 0 0 5px rgba(255, 91, 140, 0.32), inset 0 0 12px rgba(255, 198, 70, 0.45);
+    }
+    #joyDashBadge {
+      position: absolute;
+      top: -22px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #ff5b8c;
+      color: #ffffff;
+      border: 2px solid #222532;
+      border-radius: 9999px;
+      padding: 1px 8px;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      white-space: nowrap;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.12s ease;
+    }
+    #joyBase.auto-dash #joyDashBadge {
+      opacity: 1;
+    }
+    #joyKnob {
+      width: 48px;
+      height: 48px;
+      border-radius: 9999px;
+      background: #ffffff;
+      border: 2.5px solid #222532;
+      box-shadow: 0 3px 0 #222532;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      will-change: transform;
+      pointer-events: none;
+    }
+    #joyBase.auto-dash #joyKnob {
+      background: #ffe066;
+    }
+
+    /* Right-thumb tactile round action cluster */
+    #actionCluster {
+      pointer-events: auto;
+      display: flex;
+      align-items: flex-end;
+      gap: 10px;
+      touch-action: none;
+    }
+    .round-act-btn {
+      border-radius: 9999px;
+      border: 2.5px solid #222532;
+      box-shadow: 0 4px 0 #222532;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      line-height: 1.05;
+      font-weight: 800;
+      touch-action: none;
+      transition: transform 0.07s ease, box-shadow 0.07s ease, background-color 0.12s ease;
+    }
+    .round-act-btn:active, .round-act-btn.pressed {
+      transform: translateY(3px) scale(0.96);
+      box-shadow: 0 1px 0 #222532;
+    }
+    #btnPadJump {
+      width: 72px;
+      height: 72px;
+      background: linear-gradient(180deg, #ff8dad 0%, #ff638f 100%);
+      color: #ffffff;
+      font-size: 11px;
+    }
+    #btnPadQuad, #btnPadDash {
+      width: 54px;
+      height: 54px;
+      background: rgba(255, 255, 255, 0.94);
+      color: #222532;
+      font-size: 10px;
+    }
+    #btnPadQuad.active-quad {
+      background: #7ad7ff;
+      color: #162436;
+    }
+    #btnPadDash.active-dash {
+      background: #ffd166;
+      color: #222532;
+    }
+
+    /* ==================== HORIZONTAL EMOTE PILL STRIP (MOBILE) ==================== */
+    #mobileEmoteBar {
+      position: absolute;
+      left: calc(10px + var(--sal));
+      right: calc(10px + var(--sar));
+      bottom: calc(144px + var(--sab));
+      z-index: 25;
+      display: none;
+      pointer-events: auto;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      touch-action: pan-x;
+      padding: 4px 2px 6px 2px;
+    }
+    #mobileEmoteBar.studio-bottom {
+      bottom: calc(14px + var(--sab));
+    }
+    #mobileEmoteStrip {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      width: max-content;
+    }
+    .emote-pill {
+      border: 2px solid #222532;
+      box-shadow: 0 2px 0 #222532;
+      background: rgba(255, 255, 253, 0.94);
+      color: #222532;
+      border-radius: 9999px;
+      padding: 6px 11px;
+      font-size: 12px;
+      font-weight: 800;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      white-space: nowrap;
+      flex-shrink: 0;
+      transition: transform 0.08s ease, background-color 0.12s ease, color 0.12s ease;
+    }
+    .emote-pill:active {
+      transform: translateY(1px);
+    }
+    .emote-pill.active {
+      background: #222532;
+      color: #ffffff;
+    }
+
+    /* ==================== RESPONSIVE SIDEBAR / SLIDE-UP BOTTOM SHEET ==================== */
+    #drawerBackdrop {
+      display: none;
+    }
+    #settingsDrawer {
+      width: 318px;
+      height: 100dvh;
+      flex-shrink: 0;
+      z-index: 50;
+      border-left: 2px solid #222532;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    #settingsDrawer.desktop-hidden {
+      display: none;
+    }
+    #drawerHandle {
+      display: none;
+    }
+    #drawerScroll {
+      touch-action: pan-y;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    /* Mobile layout (< 860px width OR short landscape phone <= 500px height) */
+    @media (max-width: 859px), (max-height: 500px) {
+      #hudInfoPill {
+        display: none !important;
+      }
+      #mobileEmoteBar {
+        display: block;
+      }
+      #drawerBackdrop {
+        display: block;
+        position: fixed;
+        inset: 0;
+        z-index: 45;
+        background: rgba(18, 23, 38, 0.38);
+        backdrop-filter: blur(2px);
+        -webkit-backdrop-filter: blur(2px);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.22s ease;
+      }
+      #drawerBackdrop.open {
+        opacity: 1;
+        pointer-events: auto;
+      }
+      #settingsDrawer {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        width: 100%;
+        height: auto;
+        max-height: 78dvh;
+        border-left: none;
+        border-top: 2.5px solid #222532;
+        border-radius: 22px 22px 0 0;
+        box-shadow: 0 -8px 28px rgba(18, 23, 38, 0.22);
+        transform: translateY(105%);
+        transition: transform 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+        padding-bottom: var(--sab);
+      }
+      #settingsDrawer.desktop-hidden {
+        display: flex;
+      }
+      #settingsDrawer.open {
+        transform: translateY(0);
+      }
+      #drawerHandle {
+        display: flex;
+        justify-content: center;
+        padding: 8px 0 2px;
+      }
+      #drawerHandle span {
+        width: 42px;
+        height: 4px;
+        border-radius: 999px;
+        background: rgba(34, 37, 50, 0.25);
+      }
+    }
+
+    /* Compact controls on short landscape phones */
+    @media (max-height: 460px) {
+      #joyZone { width: 96px; height: 96px; }
+      #joyBase { width: 92px; height: 92px; }
+      #joyKnob { width: 40px; height: 40px; font-size: 14px; }
+      #btnPadJump { width: 60px; height: 60px; font-size: 10px; }
+      #btnPadQuad, #btnPadDash { width: 46px; height: 46px; font-size: 9px; }
+      #mobileEmoteBar { bottom: calc(114px + var(--sab)); }
+      .emote-pill { padding: 4px 9px; font-size: 11px; }
+    }
+
+    /* Range slider polish */
+    input[type="range"].ganadi-range {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 7px;
+      border-radius: 999px;
+      background: #dce6f5;
+      border: 1.5px solid #222532;
+      outline: none;
+      touch-action: pan-x;
+    }
+    input[type="range"].ganadi-range::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 20px;
+      height: 20px;
+      border-radius: 9999px;
+      background: #ff7a9e;
+      border: 2px solid #222532;
+      box-shadow: 0 2px 0 #222532;
+      cursor: pointer;
+    }
+
+    @keyframes floatToast {
+      0% { opacity: 0; transform: translate(-50%, 10px); }
+      14% { opacity: 1; transform: translate(-50%, 0); }
+      86% { opacity: 1; transform: translate(-50%, 0); }
+      100% { opacity: 0; transform: translate(-50%, -8px); }
+    }
+    .toast-anim {
+      animation: floatToast 2.3s ease forwards;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ==================== 3D PIXEL-ART VIEWPORT ==================== -->
+  <main id="viewportWrap">
+    <canvas id="webglCanvas"></canvas>
+
+    <!-- Crisp Floating Speech Bubble (Clamped inside Viewport Edges) -->
+    <div id="speechBubble" class="hidden glass-panel border-2 border-[#222532] rounded-2xl px-3 py-1.5 text-xs sm:text-sm font-extrabold text-[#222532] whitespace-nowrap shadow-md"></div>
+
+    <!-- Compact Top HUD Navigation Bar -->
+    <header id="topHudBar" class="absolute z-30 flex items-center justify-between gap-1.5 pointer-events-none">
+      <!-- Mode Toggle Pill (Top-Left) -->
+      <div class="pointer-events-auto flex items-center gap-1.5">
+        <div class="glass-panel pixel-card rounded-2xl p-1 flex items-center gap-1">
+          <button id="btnModeWorld" class="px-2.5 sm:px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-extrabold transition-colors bg-[#222532] text-white">
+            🌿 <span class="hidden sm:inline">3D </span>広場
+          </button>
+          <button id="btnModeStudio" class="px-2.5 sm:px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-extrabold transition-colors text-[#222532] hover:bg-slate-200/70">
+            🔄 スタジオ
+          </button>
+        </div>
+        <span id="hudResTag" class="hidden sm:inline-flex glass-panel border-2 border-[#222532] rounded-xl px-2 py-1 mono text-[10px] font-bold text-[#222532]">3x · 1体</span>
+      </div>
+
+      <!-- Quick Utility Buttons (Top-Right) -->
+      <div class="pointer-events-auto flex items-center gap-1.5">
+        <button id="btnQuickSpawn" title="ガナディ +5体 増殖" class="pixel-btn bg-[#ffd166] hover:bg-[#ffca4f] text-[#222532] rounded-xl px-2.5 h-9 flex items-center gap-1 text-xs font-extrabold">
+          <span>✨+5体</span>
+          <span id="topCountTag" class="mono text-[10px] bg-white/80 px-1 rounded">1</span>
+        </button>
+        <button id="btnSound" title="効果音 ON/OFF" class="hidden sm:flex glass-panel pixel-btn rounded-xl w-9 h-9 items-center justify-center text-base">
+          🔊
+        </button>
+        <button id="btnOpenSettings" title="設定・カメラメニュー" class="glass-panel pixel-btn rounded-xl px-2.5 sm:px-3 h-9 flex items-center justify-center text-xs font-extrabold gap-1">
+          <span>⚙️</span><span>設定・共有</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Desktop Info / Key Hints Pill (hidden on narrow mobile) -->
+    <div id="hudInfoPill" class="absolute z-20 glass-panel border-2 border-[#222532] rounded-2xl px-3 py-1.5 text-[11px] font-bold text-slate-700 flex flex-col gap-0.5 pointer-events-none shadow-sm max-w-[360px]">
+      <div id="worldKeyHints" class="text-[10px] leading-relaxed text-slate-600">
+        <span class="px-1 py-0.5 rounded bg-slate-200 text-[#222532] mono">WASD</span> 移動 ·
+        <span class="px-1 py-0.5 rounded bg-slate-200 text-[#222532] mono">Shift</span> 走る ·
+        <span class="px-1 py-0.5 rounded bg-slate-200 text-[#222532] mono">Space</span> 跳ぶ ·
+        <span class="px-1 py-0.5 rounded bg-slate-200 text-[#222532] mono">Q</span> 4足 ·
+        <span class="px-1 py-0.5 rounded bg-slate-200 text-[#222532] mono">1-0</span> 表情
+      </div>
+      <div id="studioHintText" class="hidden text-[10px] leading-relaxed text-slate-600">
+        1本指ドラッグで360°回転 · ピンチ / ホイールで拡大縮小 · 透過PNG保存OK
+      </div>
+    </div>
+
+    <!-- Mobile Horizontal Scrollable Emote Pill Strip (1-Thumb Swipe & Tap) -->
+    <div id="mobileEmoteBar" class="no-scrollbar">
+      <div id="mobileEmoteStrip"></div>
+    </div>
+
+    <!-- Multi-Touch Virtual Gamepad (Analog Joystick + Right-Thumb Round Action Buttons) -->
+    <div id="virtualPad" class="hidden">
+      <!-- Left Thumb: 360° Analog Joystick with Auto-Dash Ring (>78%) -->
+      <div id="joyZone">
+        <div id="joyBase">
+          <div id="joyDashBadge">💨 DASH!</div>
+          <div id="joyKnob">🐾</div>
+        </div>
+      </div>
+
+      <!-- Right Thumb: Tactile Round Action Buttons -->
+      <div id="actionCluster">
+        <div class="flex flex-col gap-2.5 mb-1">
+          <button id="btnPadDash" class="round-act-btn" title="ダッシュ切替">
+            <span class="text-base leading-none">💨</span>
+            <span class="mt-0.5">ダッシュ</span>
+          </button>
+          <button id="btnPadQuad" class="round-act-btn" title="2足 / 4足 切替">
+            <span id="padQuadIcon" class="text-base leading-none">🚶</span>
+            <span id="padQuadText" class="mt-0.5">2足</span>
+          </button>
+        </div>
+        <button id="btnPadJump" class="round-act-btn" title="ジャンプ">
+          <span class="text-xl leading-none">⬆️</span>
+          <span class="mt-0.5">ジャンプ</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Error Message Box (never uses alert) -->
+    <div id="errorBanner" class="hidden absolute inset-0 z-[60] flex items-center justify-center bg-slate-900/40 p-4">
+      <div class="glass-panel pixel-card rounded-2xl max-w-md w-full p-5 text-center space-y-2">
+        <div class="text-lg font-extrabold text-rose-600">WebGL初期化エラー</div>
+        <div id="errorText" class="text-xs font-bold text-slate-700 break-words"></div>
+      </div>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div id="toastContainer" class="absolute top-16 left-1/2 z-40 pointer-events-none"></div>
+  </main>
+
+  <!-- Mobile Bottom-Sheet Backdrop -->
+  <div id="drawerBackdrop"></div>
+
+  <!-- ==================== DESKTOP SIDEBAR / MOBILE SLIDE-UP BOTTOM SHEET ==================== -->
+  <aside id="settingsDrawer" class="glass-panel">
+    <!-- Mobile Drag Handle -->
+    <div id="drawerHandle"><span></span></div>
+
+    <!-- Drawer Header -->
+    <div class="px-3.5 py-2 border-b-2 border-[#222532]/15 flex items-center justify-between bg-white/80">
+      <div class="text-xs sm:text-sm font-extrabold text-[#222532] flex items-center gap-1.5">
+        <span>🐾</span>
+        <span>ガナディ 設定・共有</span>
+      </div>
+      <div class="flex items-center gap-1.5">
+        <button id="btnSoundDrawer" title="効果音 ON/OFF" class="pixel-btn bg-white rounded-lg w-8 h-8 flex items-center justify-center text-sm">🔊</button>
+        <button id="btnReset" title="位置・カメラリセット" class="pixel-btn bg-white rounded-lg px-2 h-8 flex items-center justify-center text-xs font-extrabold">↺ リセット</button>
+        <button id="btnCloseDrawer" title="閉じる" class="pixel-btn bg-slate-200 rounded-lg w-8 h-8 flex items-center justify-center text-xs font-extrabold">✕</button>
+      </div>
+    </div>
+
+    <!-- Scrollable Drawer Body -->
+    <div id="drawerScroll" class="flex-1 overflow-y-auto thin-scroll p-3 space-y-3">
+
+      <!-- Web Publish & LINE Sharing Helper Card -->
+      <div class="bg-emerald-50/95 border-2 border-[#222532] rounded-2xl p-2.5 space-y-2">
+        <div class="flex items-center justify-between">
+          <span class="text-[11px] font-extrabold text-[#222532]">🌐 LINEで友達と遊ぶ（無料URL化）</span>
+          <span class="mono text-[9px] px-1.5 py-0.5 rounded bg-white border border-[#222532]/30 font-bold text-emerald-700">iPhone対応</span>
+        </div>
+        <div class="grid grid-cols-2 gap-1.5">
+          <button id="btnSaveIndexHtml" class="pixel-btn bg-[#22c55e] hover:bg-[#16a34a] text-white rounded-xl py-1.5 px-2 text-[11px] font-extrabold flex items-center justify-center gap-1">
+            <span>💾</span><span>index.html保存</span>
+          </button>
+          <button id="btnCopyHtml" class="pixel-btn bg-white hover:bg-emerald-100 text-[#222532] rounded-xl py-1.5 px-2 text-[11px] font-extrabold flex items-center justify-center gap-1">
+            <span>📋</span><span>HTMLコピー</span>
+          </button>
+        </div>
+        <div class="grid grid-cols-2 gap-1.5">
+          <a href="https://app.netlify.com/drop" target="_blank" rel="noopener noreferrer" class="pixel-btn bg-white hover:bg-sky-50 text-[#222532] rounded-xl py-1.5 px-2 text-[11px] font-extrabold flex items-center justify-center gap-1 no-underline">
+            <span>🚀</span><span>Netlify Drop ↗</span>
+          </a>
+          <a href="https://tiiny.host/host-html-file/" target="_blank" rel="noopener noreferrer" class="pixel-btn bg-white hover:bg-violet-50 text-[#222532] rounded-xl py-1.5 px-2 text-[11px] font-extrabold flex items-center justify-center gap-1 no-underline">
+            <span>⚡</span><span>Tiiny Host ↗</span>
+          </a>
+        </div>
+        <p class="text-[10px] leading-snug font-bold text-slate-600 m-0">
+          ① <b>index.html保存</b> → ② 上のどちらかのサイトへアップロード → ③ 発行されたURLをLINEで送るだけ！
+        </p>
+      </div>
+
+      <!-- Low-Poly / PS1 / Smooth Model Style Switcher -->
+      <div class="bg-pink-50/95 border-2 border-[#222532] rounded-2xl p-2.5 space-y-2">
+        <div class="flex items-center justify-between">
+          <span class="text-[11px] font-extrabold text-[#222532]">💎 3Dモデル表現</span>
+          <span id="polyCountBadge" class="mono text-[10px] px-1.5 py-0.5 rounded bg-white border border-[#222532]/30 font-bold text-pink-600">436 tris</span>
+        </div>
+        <div class="grid grid-cols-3 gap-1.5">
+          <button data-style="lowpoly" class="style-btn pixel-btn active rounded-xl py-1.5 text-[11px] font-extrabold">💎 DSローポリ</button>
+          <button data-style="ps1"     class="style-btn pixel-btn bg-white rounded-xl py-1.5 text-[11px] font-extrabold">🎮 PS1レトロ</button>
+          <button data-style="smooth"  class="style-btn pixel-btn bg-white rounded-xl py-1.5 text-[11px] font-extrabold">🫧 なめらか</button>
+        </div>
+        <div class="grid grid-cols-2 gap-1.5 text-[11px] font-extrabold">
+          <label class="flex items-center gap-1.5 bg-white border-2 border-[#222532] rounded-xl py-1 px-2 cursor-pointer">
+            <input id="chkFlatShade" type="checkbox" checked class="accent-[#222532] w-3.5 h-3.5" />
+            <span>パキッと面陰影</span>
+          </label>
+          <label class="flex items-center gap-1.5 bg-white border-2 border-[#222532] rounded-xl py-1 px-2 cursor-pointer">
+            <input id="chkWireframe" type="checkbox" class="accent-[#222532] w-3.5 h-3.5" />
+            <span>ワイヤー表示</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- 2-Leg / 4-Leg Hybrid Switch -->
+      <div class="bg-sky-50/90 border-2 border-[#222532] rounded-2xl p-2.5">
+        <div class="flex items-center justify-between mb-1.5">
+          <span class="text-[11px] font-extrabold text-[#222532]">🐕 歩行スタイル</span>
+          <span class="mono text-[10px] px-1.5 py-0.5 rounded bg-white border border-[#222532]/30 font-bold">Qキー</span>
+        </div>
+        <div class="grid grid-cols-2 gap-1.5">
+          <button id="btnStyleBiped" class="pixel-btn active rounded-xl py-1.5 text-xs font-extrabold">🚶 2足立ち</button>
+          <button id="btnStyleQuad" class="pixel-btn bg-white rounded-xl py-1.5 text-xs font-extrabold">🐕 4足マルチーズ</button>
+        </div>
+      </div>
+
+      <!-- Crowd Spawner (World Mode) -->
+      <div id="crowdPanel" class="bg-amber-50/90 border-2 border-[#222532] rounded-2xl p-2.5">
+        <div class="flex items-center justify-between mb-1.5">
+          <span class="text-[11px] font-extrabold text-[#222532]">🏃 みんなで遊ぶ (AIガナディ)</span>
+          <span id="crowdCountBadge" class="mono text-[10px] px-1.5 py-0.5 rounded bg-white border border-[#222532]/30 font-bold">1体</span>
+        </div>
+        <div class="grid grid-cols-3 gap-1.5">
+          <button id="btnSpawn5" class="col-span-2 pixel-btn bg-[#ffd166] hover:bg-[#ffca4f] text-[#222532] rounded-xl py-1.5 text-xs font-extrabold">
+            ✨ +5体 増殖
+          </button>
+          <button id="btnClearCrowd" class="pixel-btn bg-white hover:bg-rose-50 text-[#222532] rounded-xl py-1.5 text-xs font-extrabold">
+            クリア
+          </button>
+        </div>
+      </div>
+
+      <!-- Camera Presets & Zoom / Pitch Sliders -->
+      <div class="bg-slate-100/90 border border-slate-200 rounded-2xl p-2.5 space-y-2.5">
+        <div class="text-[11px] font-extrabold text-slate-600">🎥 カメラ角度・ズーム</div>
+        <div class="grid grid-cols-4 gap-1.5">
+          <button data-yaw="0"   data-pitch="14" class="preset-btn pixel-btn bg-white rounded-xl py-1.5 text-[11px] font-extrabold">正面<br/><span class="mono text-[9px] opacity-65">0°</span></button>
+          <button data-yaw="35"  data-pitch="18" class="preset-btn pixel-btn bg-white rounded-xl py-1.5 text-[11px] font-extrabold">斜め<br/><span class="mono text-[9px] opacity-65">35°</span></button>
+          <button data-yaw="90"  data-pitch="14" class="preset-btn pixel-btn bg-white rounded-xl py-1.5 text-[11px] font-extrabold">真横<br/><span class="mono text-[9px] opacity-65">90°</span></button>
+          <button data-yaw="180" data-pitch="16" class="preset-btn pixel-btn bg-white rounded-xl py-1.5 text-[11px] font-extrabold">背面<br/><span class="mono text-[9px] opacity-65">180°</span></button>
+        </div>
+
+        <!-- Zoom Slider -->
+        <div>
+          <div class="flex items-center justify-between text-[11px] font-bold text-slate-600 mb-1">
+            <span>🔍 ズーム距離</span>
+            <span id="zoomValLabel" class="mono text-[10px] font-bold text-[#222532]">10.0</span>
+          </div>
+          <input id="sliderZoom" type="range" min="4.0" max="21.0" step="0.1" value="10.0" class="ganadi-range" />
+        </div>
+
+        <!-- Pitch Slider -->
+        <div>
+          <div class="flex items-center justify-between text-[11px] font-bold text-slate-600 mb-1">
+            <span>📐 見下ろし角 (Pitch)</span>
+            <span id="pitchValLabel" class="mono text-[10px] font-bold text-[#222532]">22°</span>
+          </div>
+          <input id="sliderPitch" type="range" min="6" max="68" step="1" value="22" class="ganadi-range" />
+        </div>
+      </div>
+
+      <!-- Pixel Resolution, Outline, Auto-Rotate & Virtual Pad Toggle -->
+      <div class="bg-slate-100/90 border border-slate-200 rounded-2xl p-2.5 space-y-2.5">
+        <div>
+          <div class="flex items-center justify-between mb-1.5">
+            <span class="text-[11px] font-extrabold text-slate-600">🧱 ドット解像度 (Pixel Scale)</span>
+            <span id="pixelSizeLabel" class="mono text-[10px] font-bold text-pink-600">3x</span>
+          </div>
+          <div class="grid grid-cols-3 gap-1.5">
+            <button data-px="2" class="px-btn pixel-btn bg-white rounded-xl py-1 text-xs font-extrabold mono">2x</button>
+            <button data-px="3" class="px-btn pixel-btn active rounded-xl py-1 text-xs font-extrabold mono">3x</button>
+            <button data-px="4" class="px-btn pixel-btn bg-white rounded-xl py-1 text-xs font-extrabold mono">4x</button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-1.5 text-[11px] font-extrabold">
+          <label class="flex items-center gap-1.5 bg-white border-2 border-[#222532] rounded-xl py-1.5 px-2 cursor-pointer">
+            <input id="chkOutline" type="checkbox" checked class="accent-[#222532] w-4 h-4" />
+            <span>1px輪郭線</span>
+          </label>
+          <label class="flex items-center gap-1.5 bg-white border-2 border-[#222532] rounded-xl py-1.5 px-2 cursor-pointer">
+            <input id="chkAutoRot" type="checkbox" class="accent-[#222532] w-4 h-4" />
+            <span>自動回転</span>
+          </label>
+          <label class="col-span-2 flex items-center justify-between bg-white border-2 border-[#222532] rounded-xl py-1.5 px-2.5 cursor-pointer">
+            <span class="flex items-center gap-1.5"><span>🎮</span><span>仮想パッド表示 (タッチ操作)</span></span>
+            <input id="chkVirtualPad" type="checkbox" class="accent-[#222532] w-4 h-4" />
+          </label>
+        </div>
+      </div>
+
+      <!-- All 12 Expressions & Poses -->
+      <div>
+        <div class="flex items-center justify-between mb-1.5">
+          <span class="text-[11px] font-extrabold text-slate-600">😊 表情・ポーズ (全12種)</span>
+          <span class="mono text-[10px] text-slate-400 font-bold">1-0キー</span>
+        </div>
+        <div id="emoteGrid" class="grid grid-cols-2 gap-1.5"></div>
+      </div>
+
+      <!-- Transparent PNG & Low-Poly GLB Export -->
+      <div class="grid grid-cols-2 gap-1.5">
+        <button id="btnExportPng" class="pixel-btn bg-[#222532] text-white hover:bg-slate-800 rounded-2xl py-2.5 px-2 text-xs font-extrabold flex items-center justify-center gap-1">
+          <span>📷</span>
+          <span>透過PNG保存</span>
+        </button>
+        <button id="btnExportGlb" class="pixel-btn bg-[#ff7a9e] text-white hover:bg-[#f2658b] rounded-2xl py-2.5 px-2 text-xs font-extrabold flex items-center justify-center gap-1">
+          <span>📦</span>
+          <span>.GLB 書き出し</span>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <script>
+    (function () {
+      'use strict';
+
+      // =======================================================================
+      // 1. CORE DESIGN CONSTANTS & CANONICAL 12 GANADI EXPRESSIONS / POSES
+      // =======================================================================
+      const S = 0.05;               // 1 design unit = 0.05 Three.js world units
+      const RAD = Math.PI / 180;    // Degrees to radians
+      const WORLD_HALF = 10.5;      // Meadow half-width
+
+      // Faithful gentle-面長 (slightly elongated) Ganadi head dimensions
+      const HEAD_PIVOT_Y  = 20.5;   // Neck pivot height in design units
+      const HEAD_CENTER_Y = 32.8;   // Head center height in character space
+      const HEAD_LOCAL_CY = HEAD_CENTER_Y - HEAD_PIVOT_Y; // 12.3
+      const HEAD_RX = 12.1;
+      const HEAD_RY = 13.7;
+      const HEAD_RZ = 12.5;
+      const HEAD_P  = 2.35;
+
+      const EMOTES = [
+        { id: 'normal', label: '通常',     icon: '🐶', face: 'normal', pose: 'idle',   prop: null,    bubble: 'わん！',                key: '1' },
+        { id: 'hug',    label: '抱いて…',  icon: '🥺', face: 'hug',    pose: 'hug',    prop: null,    bubble: '私、抱いて… (나 안아…)', key: '2' },
+        { id: 'du',     label: 'デュ…',    icon: '💧', face: 'du',     pose: 'du',     prop: null,    bubble: 'デュ… (듀…)',           key: '3' },
+        { id: 'cry',    label: '号泣',     icon: '😭', face: 'cry',    pose: 'cry',    prop: null,    bubble: 'デュアアア！！',         key: '4' },
+        { id: 'geso',   label: 'ゲソっと', icon: '🫥', face: 'geso',   pose: 'geso',   prop: null,    bubble: 'ゲソ…',                 key: '5' },
+        { id: 'happy',  label: 'ダンス',   icon: '🎵', face: 'happy',  pose: 'dance',  prop: null,    bubble: 'るんるん♪',             key: '6' },
+        { id: 'fierce', label: '凶暴ガオ', icon: '💢', face: 'fierce', pose: 'fierce', prop: null,    bubble: 'ガオーッ！！',           key: '7' },
+        { id: 'angel',  label: '天使',     icon: '😇', face: 'happy',  pose: 'angel',  prop: 'angel', bubble: '天使ガナディ✨',         key: '8' },
+        { id: 'devil',  label: '悪魔',     icon: '😈', face: 'devil',  pose: 'devil',  prop: 'devil', bubble: '悪魔ガナディ…😈',       key: '9' },
+        { id: 'rose',   label: 'バラ',     icon: '🌹', face: 'rose',   pose: 'rose',   prop: 'rose',  bubble: 'キミに捧げるよ…🌹',     key: '0' },
+        { id: 'sit',    label: 'おすわり', icon: '🐾', face: 'normal', pose: 'sit',    prop: null,    bubble: 'ぽてっ',                key: ''  },
+        { id: 'sleep',  label: 'おひるね', icon: '💤', face: 'sleep',  pose: 'sleep',  prop: null,    bubble: 'すやぁ… Zzz',           key: ''  },
+      ];
+      const EMOTE_BY_ID = Object.create(null);
+      EMOTES.forEach((em) => { EMOTE_BY_ID[em.id] = em; });
+
+      // =======================================================================
+      // 2. SPOTLESS 3-TONE CUSTOM GLSL CEL SHADER (DS LOW-POLY + PS1 SNAP!)
+      // =======================================================================
+      const globalRenderUniforms = {
+        uFlatMix: { value: 1.0 },
+        uSnapRes: { value: 0.0 },
+      };
+
+      function createCelMaterial(cLightHex, cMidHex, cDarkHex) {
+        const cL = new THREE.Color(cLightHex);
+        const cM = new THREE.Color(cMidHex);
+        const cD = new THREE.Color(cDarkHex);
+        const mat = new THREE.ShaderMaterial({
+          uniforms: {
+            uColorLight: { value: new THREE.Vector3(cL.r, cL.g, cL.b) },
+            uColorMid:   { value: new THREE.Vector3(cM.r, cM.g, cM.b) },
+            uColorDark:  { value: new THREE.Vector3(cD.r, cD.g, cD.b) },
+            uFlatMix:    globalRenderUniforms.uFlatMix,
+            uSnapRes:    globalRenderUniforms.uSnapRes,
+          },
+          vertexShader: `
+            attribute vec3 aFlatNormal;
+            uniform float uFlatMix;
+            uniform float uSnapRes;
+            varying vec3 vNormal;
+            void main() {
+              vec3 chosenN = normalize(mix(normal, aFlatNormal, uFlatMix));
+              vNormal = normalize(normalMatrix * chosenN);
+              vec4 clipPos = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+              if (uSnapRes > 0.5) {
+                vec2 grid = vec2(uSnapRes, uSnapRes * 0.75);
+                clipPos.xy = floor(clipPos.xy / clipPos.w * grid + 0.5) / grid * clipPos.w;
+              }
+              gl_Position = clipPos;
+            }
+          `,
+          fragmentShader: `
+            varying vec3 vNormal;
+            uniform vec3 uColorLight;
+            uniform vec3 uColorMid;
+            uniform vec3 uColorDark;
+            void main() {
+              float nd = dot(normalize(vNormal), normalize(vec3(-0.20, 0.72, 0.66)));
+              vec3 col = nd >= 0.14 ? uColorLight : (nd >= -0.34 ? uColorMid : uColorDark);
+              gl_FragColor = vec4(col, 1.0);
+            }
+          `,
+        });
+        mat.userData.baseHex = cLightHex;
+        return mat;
+      }
+
+      function ensureFlatNormalAttribute(geo, computeFaceted = false) {
+        if (!geo.attributes.normal) geo.computeVertexNormals();
+        if (!computeFaceted) {
+          const nArr = geo.attributes.normal.array;
+          geo.setAttribute('aFlatNormal', new THREE.BufferAttribute(new Float32Array(nArr), 3));
+          return geo;
+        }
+        const nonIdx = geo.index ? geo.toNonIndexed() : geo;
+        const pos = nonIdx.attributes.position;
+        const flatArr = new Float32Array(pos.count * 3);
+        const a = new THREE.Vector3();
+        const b = new THREE.Vector3();
+        const c = new THREE.Vector3();
+        const ab = new THREE.Vector3();
+        const ac = new THREE.Vector3();
+        const fn = new THREE.Vector3();
+        for (let i = 0; i < pos.count; i += 3) {
+          a.fromBufferAttribute(pos, i);
+          b.fromBufferAttribute(pos, i + 1);
+          c.fromBufferAttribute(pos, i + 2);
+          ab.subVectors(b, a);
+          ac.subVectors(c, a);
+          fn.crossVectors(ab, ac);
+          if (fn.lengthSq() > 1e-10) fn.normalize();
+          else fn.set(0, 1, 0);
+          for (let k = 0; k < 3; k++) {
+            const idx = (i + k) * 3;
+            flatArr[idx]     = fn.x;
+            flatArr[idx + 1] = fn.y;
+            flatArr[idx + 2] = fn.z;
+          }
+        }
+        nonIdx.setAttribute('aFlatNormal', new THREE.BufferAttribute(flatArr, 3));
+        return nonIdx;
+      }
+
+      // =======================================================================
+      // 3. LOW-POLY (DS / ANIMAL CROSSING / BLOCKBENCH) & SMOOTH GEOMETRIES
+      // =======================================================================
+      const OCT_SQUIRCLE = [
+        [-0.56, -0.96],
+        [-0.98, -0.52],
+        [-0.98,  0.52],
+        [-0.60,  0.97],
+        [ 0.60,  0.97],
+        [ 0.98,  0.52],
+        [ 0.98, -0.52],
+        [ 0.56, -0.96],
+      ];
+
+      const HEX_RING = [
+        [-0.50, -0.88],
+        [-1.00,  0.00],
+        [-0.50,  0.88],
+        [ 0.50,  0.88],
+        [ 1.00,  0.00],
+        [ 0.50, -0.88],
+      ];
+
+      const LOWPOLY_HEAD_RINGS = [
+        { y: -13.6, sx: 0.46,  sz: 0.46,  zOff: 0 },
+        { y: -10.8, sx: 0.92,  sz: 0.90,  zOff: 0 },
+        { y:  -4.2, sx: 1.045, sz: 1.03,  zOff: 0 },
+        { y:   3.2, sx: 1.01,  sz: 1.01,  zOff: 0 },
+        { y:   9.7, sx: 0.87,  sz: 0.87,  zOff: 0 },
+        { y:  13.7, sx: 0.48,  sz: 0.48,  zOff: 0 },
+      ];
+
+      function createLowPolyLathe(ringSpecs, profileXY, rx, rz) {
+        const sides = profileXY.length;
+        const numRings = ringSpecs.length;
+        const positions = [];
+        const uvs = [];
+        const indices = [];
+
+        const cols = sides + 1;
+        for (let r = 0; r < numRings; r++) {
+          const rs = ringSpecs[r];
+          const vFrac = r / Math.max(1, numRings - 1);
+          const zOff = rs.zOff || 0;
+          const xOff = rs.xOff || 0;
+          for (let i = 0; i <= sides; i++) {
+            const pt = profileXY[i % sides];
+            const px = (pt[0] * rx * rs.sx + xOff) * S;
+            const py = rs.y * S;
+            const pz = (pt[1] * rz * rs.sz + zOff) * S;
+            positions.push(px, py, pz);
+            uvs.push(i / sides, vFrac);
+          }
+        }
+
+        for (let r = 0; r < numRings - 1; r++) {
+          for (let i = 0; i < sides; i++) {
+            const a = r * cols + i;
+            const b = r * cols + (i + 1);
+            const c = (r + 1) * cols + (i + 1);
+            const d = (r + 1) * cols + i;
+            indices.push(a, b, c, a, c, d);
+          }
+        }
+
+        const botSpec = ringSpecs[0];
+        const botCenterIdx = positions.length / 3;
+        positions.push((botSpec.xOff || 0) * S, botSpec.y * S, (botSpec.zOff || 0) * S);
+        uvs.push(0.5, 0.0);
+        for (let i = 0; i < sides; i++) {
+          const v0 = i;
+          const v1 = (i + 1) % sides;
+          indices.push(botCenterIdx, v1, v0);
+        }
+
+        const topSpec = ringSpecs[numRings - 1];
+        const topCenterIdx = positions.length / 3;
+        positions.push((topSpec.xOff || 0) * S, topSpec.y * S, (topSpec.zOff || 0) * S);
+        uvs.push(0.5, 1.0);
+        const topBase = (numRings - 1) * cols;
+        for (let i = 0; i < sides; i++) {
+          const v0 = topBase + i;
+          const v1 = topBase + ((i + 1) % sides);
+          indices.push(topCenterIdx, v0, v1);
+        }
+
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+        geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+        geo.setIndex(indices);
+        geo.computeVertexNormals();
+
+        const nAttr = geo.attributes.normal;
+        for (let r = 0; r < numRings; r++) {
+          const i0 = r * cols;
+          const i1 = r * cols + sides;
+          let nx = nAttr.getX(i0) + nAttr.getX(i1);
+          let ny = nAttr.getY(i0) + nAttr.getY(i1);
+          let nz = nAttr.getZ(i0) + nAttr.getZ(i1);
+          const len = Math.hypot(nx, ny, nz) || 1;
+          nx /= len; ny /= len; nz /= len;
+          nAttr.setXYZ(i0, nx, ny, nz);
+          nAttr.setXYZ(i1, nx, ny, nz);
+        }
+        nAttr.needsUpdate = true;
+
+        return ensureFlatNormalAttribute(geo, true);
+      }
+
+      function createLowPolyCurvedTail() {
+        const spine = [
+          { y: 0.0, z: -0.2, r: 2.2 },
+          { y: 0.8, z: -2.4, r: 2.3 },
+          { y: 2.6, z: -4.2, r: 2.1 },
+          { y: 4.8, z: -4.8, r: 1.85 },
+          { y: 6.4, z: -4.3, r: 1.0 },
+        ];
+        const sides = 6;
+        const positions = [];
+        const uvs = [];
+        const indices = [];
+
+        for (let s = 0; s < spine.length; s++) {
+          const cur = spine[s];
+          const prev = spine[Math.max(0, s - 1)];
+          const next = spine[Math.min(spine.length - 1, s + 1)];
+          let ty = next.y - prev.y;
+          let tz = next.z - prev.z;
+          const tl = Math.hypot(ty, tz) || 1;
+          ty /= tl; tz /= tl;
+          const ny = -tz;
+          const nz = ty;
+
+          for (let i = 0; i <= sides; i++) {
+            const ang = (i / sides) * Math.PI * 2;
+            const cx = Math.cos(ang) * cur.r;
+            const cyz = Math.sin(ang) * cur.r;
+            positions.push(
+              cx * S,
+              (cur.y + ny * cyz) * S,
+              (cur.z + nz * cyz) * S
+            );
+            uvs.push(i / sides, s / (spine.length - 1));
+          }
+        }
+
+        const cols = sides + 1;
+        for (let s = 0; s < spine.length - 1; s++) {
+          for (let i = 0; i < sides; i++) {
+            const a = s * cols + i;
+            const b = s * cols + (i + 1);
+            const c = (s + 1) * cols + (i + 1);
+            const d = (s + 1) * cols + i;
+            indices.push(a, c, b, a, d, c);
+          }
+        }
+
+        const tipCenterIdx = positions.length / 3;
+        const tip = spine[spine.length - 1];
+        positions.push(0, (tip.y + 0.5) * S, tip.z * S);
+        uvs.push(0.5, 1.0);
+        const topBase = (spine.length - 1) * cols;
+        for (let i = 0; i < sides; i++) {
+          indices.push(tipCenterIdx, topBase + ((i + 1) % sides), topBase + i);
+        }
+
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+        geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+        geo.setIndex(indices);
+        geo.computeVertexNormals();
+        return ensureFlatNormalAttribute(geo, true);
+      }
+
+      function createLowPolyFacePatchGeometry() {
+        const ringIndices = [1, 2, 3, 4];
+        const p2 = OCT_SQUIRCLE[2];
+        const p3 = OCT_SQUIRCLE[3];
+        const p4 = OCT_SQUIRCLE[4];
+        const p5 = OCT_SQUIRCLE[5];
+        const tCheek = 0.62;
+
+        const colPts = [
+          [p3[0] + (p2[0] - p3[0]) * tCheek, p3[1] + (p2[1] - p3[1]) * tCheek],
+          [p3[0], p3[1]],
+          [p4[0], p4[1]],
+          [p4[0] + (p5[0] - p4[0]) * tCheek, p4[1] + (p5[1] - p4[1]) * tCheek],
+        ];
+
+        const positions = [];
+        const uvs = [];
+        const indices = [];
+
+        for (let r = 0; r < ringIndices.length; r++) {
+          const rs = LOWPOLY_HEAD_RINGS[ringIndices[r]];
+          const yChar = HEAD_CENTER_Y + rs.y;
+          const v = clamp((yChar - 22.0) / 20.5, 0.0, 1.0);
+
+          for (let c = 0; c < colPts.length; c++) {
+            const xBase = colPts[c][0] * HEAD_RX * rs.sx;
+            const zBase = colPts[c][1] * HEAD_RZ * rs.sz;
+            const u = clamp((xBase - (-10.5)) / 21.0, 0.0, 1.0);
+
+            let nx = xBase / (HEAD_RX * HEAD_RX);
+            let ny = rs.y / (HEAD_RY * HEAD_RY);
+            let nz = zBase / (HEAD_RZ * HEAD_RZ);
+            const nLen = Math.hypot(nx, ny, nz) || 1;
+            nx /= nLen; ny /= nLen; nz /= nLen;
+
+            const push = 0.30;
+            positions.push(
+              (xBase + nx * push) * S,
+              (HEAD_LOCAL_CY + rs.y + ny * push) * S,
+              (zBase + nz * push) * S
+            );
+            uvs.push(u, v);
+          }
+        }
+
+        const cols = colPts.length;
+        for (let r = 0; r < ringIndices.length - 1; r++) {
+          for (let c = 0; c < cols - 1; c++) {
+            const a = r * cols + c;
+            const b = r * cols + (c + 1);
+            const cc = (r + 1) * cols + (c + 1);
+            const d = (r + 1) * cols + c;
+            indices.push(a, b, cc, a, cc, d);
+          }
+        }
+
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+        geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+        geo.setIndex(indices);
+        geo.computeVertexNormals();
+        return geo;
+      }
+
+      function spow(v, e) {
+        return Math.sign(v) * Math.pow(Math.abs(v), e);
+      }
+
+      function clamp(v, lo, hi) {
+        return v < lo ? lo : (v > hi ? hi : v);
+      }
+
+      function createSuperellipsoidGeometry(rx, ry, rz, p = 2.3, options = {}) {
+        const lonSegs = options.lonSegs || 28;
+        const latSegs = options.latSegs || 20;
+        const cheekBulge = !!options.cheekBulge;
+        const foldZ = options.foldZ || 0;
+        const e = 2.0 / p;
+
+        const cols = lonSegs + 1;
+        const rows = latSegs + 1;
+        const positions = new Float32Array(rows * cols * 3);
+        const uvs = new Float32Array(rows * cols * 2);
+
+        let ptr = 0;
+        let uvPtr = 0;
+
+        for (let j = 0; j <= latSegs; j++) {
+          const vFrac = j / latSegs;
+          const phi = (-0.5 + vFrac) * Math.PI * 0.996;
+          const cosP = Math.cos(phi);
+          const sinP = Math.sin(phi);
+          const yNorm = spow(sinP, e);
+          const y = ry * yNorm;
+
+          let bulge = 1.0;
+          if (cheekBulge) {
+            const t = (yNorm + 1.0) * 0.5;
+            bulge = 1.0 + 0.045 * Math.sin(Math.PI * clamp((0.78 - t) / 0.78, 0.0, 1.0));
+          }
+          const zFold = foldZ * clamp(-yNorm, -1.0, 1.0);
+
+          for (let i = 0; i <= lonSegs; i++) {
+            const uFrac = i / lonSegs;
+            const theta = -Math.PI + uFrac * Math.PI * 2.0;
+            const x = rx * bulge * spow(cosP, e) * spow(Math.sin(theta), e);
+            const z = rz * bulge * spow(cosP, e) * spow(Math.cos(theta), e) + zFold;
+
+            positions[ptr++] = x * S;
+            positions[ptr++] = y * S;
+            positions[ptr++] = z * S;
+
+            uvs[uvPtr++] = uFrac;
+            uvs[uvPtr++] = vFrac;
+          }
+        }
+
+        const indices = [];
+        for (let j = 0; j < latSegs; j++) {
+          for (let i = 0; i < lonSegs; i++) {
+            const a = j * cols + i;
+            const b = j * cols + (i + 1);
+            const c = (j + 1) * cols + (i + 1);
+            const d = (j + 1) * cols + i;
+            indices.push(a, b, c, a, c, d);
+          }
+        }
+
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+        geo.setIndex(indices);
+        geo.computeVertexNormals();
+
+        const nAttr = geo.attributes.normal;
+        for (let j = 0; j <= latSegs; j++) {
+          if (j === 0 || j === latSegs) {
+            const py = j === 0 ? -1 : 1;
+            for (let i = 0; i <= lonSegs; i++) {
+              nAttr.setXYZ(j * cols + i, 0, py, 0);
+            }
+          } else {
+            const idx0 = j * cols;
+            const idx1 = j * cols + lonSegs;
+            let nx = nAttr.getX(idx0) + nAttr.getX(idx1);
+            let ny = nAttr.getY(idx0) + nAttr.getY(idx1);
+            let nz = nAttr.getZ(idx0) + nAttr.getZ(idx1);
+            const len = Math.hypot(nx, ny, nz) || 1;
+            nx /= len; ny /= len; nz /= len;
+            nAttr.setXYZ(idx0, nx, ny, nz);
+            nAttr.setXYZ(idx1, nx, ny, nz);
+          }
+        }
+        nAttr.needsUpdate = true;
+        return ensureFlatNormalAttribute(geo, false);
+      }
+
+      function createConformalFacePatchGeometry() {
+        const segX = 24;
+        const segY = 24;
+        const cols = segX + 1;
+        const rows = segY + 1;
+        const positions = new Float32Array(rows * cols * 3);
+        const uvs = new Float32Array(rows * cols * 2);
+
+        const xMin = -10.5, xMax = 10.5;
+        const yMin = 22.0,  yMax = 42.5;
+
+        let ptr = 0;
+        let uvPtr = 0;
+
+        for (let j = 0; j <= segY; j++) {
+          const v = j / segY;
+          const yChar = yMin + v * (yMax - yMin);
+          const dy = yChar - HEAD_CENTER_Y;
+          const yNorm = clamp(dy / HEAD_RY, -0.98, 0.98);
+          const t = (yNorm + 1.0) * 0.5;
+          const bulge = 1.0 + 0.045 * Math.sin(Math.PI * clamp((0.78 - t) / 0.78, 0.0, 1.0));
+          const rxEff = HEAD_RX * bulge;
+          const rzEff = HEAD_RZ * bulge;
+
+          for (let i = 0; i <= segX; i++) {
+            const u = i / segX;
+            let x = xMin + u * (xMax - xMin);
+            let dyClamped = dy;
+
+            const termX = Math.pow(Math.abs(x) / rxEff, HEAD_P);
+            const termY = Math.pow(Math.abs(dyClamped) / HEAD_RY, HEAD_P);
+            const sumXY = termX + termY;
+            let z = 0;
+            if (sumXY < 0.985) {
+              z = rzEff * Math.pow(1.0 - sumXY, 1.0 / HEAD_P);
+            } else {
+              const shrink = Math.pow(0.985 / sumXY, 1.0 / HEAD_P);
+              x *= shrink;
+              dyClamped *= shrink;
+              z = rzEff * Math.pow(0.015, 1.0 / HEAD_P);
+            }
+
+            let nx = x / (rxEff * rxEff);
+            let ny = dyClamped / (HEAD_RY * HEAD_RY);
+            let nz = z / (rzEff * rzEff);
+            const nLen = Math.hypot(nx, ny, nz) || 1;
+            nx /= nLen; ny /= nLen; nz /= nLen;
+
+            const push = 0.26;
+            const px = x + nx * push;
+            const py = (HEAD_LOCAL_CY + dyClamped) + ny * push;
+            const pz = z + nz * push;
+
+            positions[ptr++] = px * S;
+            positions[ptr++] = py * S;
+            positions[ptr++] = pz * S;
+
+            uvs[uvPtr++] = u;
+            uvs[uvPtr++] = v;
+          }
+        }
+
+        const indices = [];
+        for (let j = 0; j < segY; j++) {
+          for (let i = 0; i < segX; i++) {
+            const a = j * cols + i;
+            const b = j * cols + (i + 1);
+            const c = (j + 1) * cols + (i + 1);
+            const d = (j + 1) * cols + i;
+            indices.push(a, b, c, a, c, d);
+          }
+        }
+
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+        geo.setIndex(indices);
+        geo.computeVertexNormals();
+        return geo;
+      }
+
+      // =======================================================================
+      // 4. CRISP 64x64 PIXEL-ART FACE TEXTURES (FAITHFUL 面長 SPACING!)
+      // =======================================================================
+      const faceMaterialCache = {};
+
+      function getFaceMaterial(faceId) {
+        if (faceMaterialCache[faceId]) return faceMaterialCache[faceId];
+
+        const cvs = document.createElement('canvas');
+        cvs.width = 64;
+        cvs.height = 64;
+        const ctx = cvs.getContext('2d');
+        ctx.clearRect(0, 0, 64, 64);
+
+        const INK       = '#222532';
+        const WHITE     = '#ffffff';
+        const BLUSH     = '#ffa6be';
+        const TEAR_DARK = '#4eb3ff';
+        const TEAR_LITE = '#a8e2ff';
+        const MOUTH_PNK = '#f26a88';
+        const GLOOM_GRY = '#8092b0';
+
+        function pRect(x, y, w, h, col) {
+          ctx.fillStyle = col;
+          ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
+        }
+
+        function pDisk(cx, cy, r, col) {
+          ctx.fillStyle = col;
+          const x0 = Math.floor(cx - r), x1 = Math.ceil(cx + r);
+          const y0 = Math.floor(cy - r), y1 = Math.ceil(cy + r);
+          for (let y = y0; y <= y1; y++) {
+            for (let x = x0; x <= x1; x++) {
+              if ((x - cx) * (x - cx) + (y - cy) * (y - cy) <= r * r + 0.25) {
+                ctx.fillRect(x, y, 1, 1);
+              }
+            }
+          }
+        }
+
+        function pLine(x0, y0, x1, y1, r, col) {
+          const steps = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0), 1) * 2;
+          for (let s = 0; s <= steps; s++) {
+            const t = s / steps;
+            pDisk(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, r, col);
+          }
+        }
+
+        function drawNose(ny = 43) {
+          pRect(30, ny - 1, 4, 3, INK);
+        }
+
+        function drawOmegaMouth() {
+          pRect(31, 44, 2, 4, INK);
+          pLine(32, 48, 28, 51, 1.15, INK);
+          pLine(28, 51, 24, 49, 1.10, INK);
+          pLine(32, 48, 36, 51, 1.15, INK);
+          pLine(36, 51, 40, 49, 1.10, INK);
+        }
+
+        function drawBlush(y = 31) {
+          pDisk(10, y, 3.6, BLUSH);
+          pDisk(12, y, 3.2, BLUSH);
+          pDisk(54, y, 3.6, BLUSH);
+          pDisk(52, y, 3.2, BLUSH);
+        }
+
+        if (faceId === 'normal') {
+          pDisk(15, 21, 2.7, INK);
+          pDisk(49, 21, 2.7, INK);
+          drawNose(43);
+          drawOmegaMouth();
+        } else if (faceId === 'hug') {
+          pDisk(15, 21, 3.8, INK);
+          pDisk(49, 21, 3.8, INK);
+          pDisk(13.5, 19.5, 1.45, WHITE);
+          pDisk(47.5, 19.5, 1.45, WHITE);
+          pDisk(16.5, 22.8, 1.0, TEAR_LITE);
+          pDisk(50.5, 22.8, 1.0, TEAR_LITE);
+          drawBlush(31);
+          drawNose(43);
+          pRect(31, 44, 2, 4, INK);
+          pLine(27, 50, 32, 48, 1.15, INK);
+          pLine(32, 48, 37, 50, 1.15, INK);
+        } else if (faceId === 'du') {
+          pLine(10, 14, 19, 11, 1.2, INK);
+          pLine(54, 14, 45, 11, 1.2, INK);
+          pDisk(15, 21, 4.0, INK);
+          pDisk(49, 21, 4.0, INK);
+          pRect(12, 23, 7, 3, TEAR_DARK);
+          pRect(45, 23, 7, 3, TEAR_DARK);
+          pRect(13, 22, 5, 2, TEAR_LITE);
+          pRect(46, 22, 5, 2, TEAR_LITE);
+          pDisk(13.5, 19.5, 1.5, WHITE);
+          pDisk(47.5, 19.5, 1.5, WHITE);
+          pDisk(14, 29, 1.6, TEAR_DARK);
+          pDisk(50, 29, 1.6, TEAR_DARK);
+          drawNose(43);
+          pLine(26, 51, 32, 47, 1.2, INK);
+          pLine(32, 47, 38, 51, 1.2, INK);
+        } else if (faceId === 'cry') {
+          pRect(12, 23, 6, 33, TEAR_DARK);
+          pRect(46, 23, 6, 33, TEAR_DARK);
+          pRect(14, 24, 2, 31, TEAR_LITE);
+          pRect(48, 24, 2, 31, TEAR_LITE);
+          pLine(10, 17, 19, 21, 1.4, INK);
+          pLine(19, 21, 10, 25, 1.4, INK);
+          pLine(54, 17, 45, 21, 1.4, INK);
+          pLine(45, 21, 54, 25, 1.4, INK);
+          drawNose(42);
+          pDisk(32, 51, 5.2, INK);
+          pDisk(32, 51.5, 3.6, MOUTH_PNK);
+        } else if (faceId === 'geso') {
+          const gxList = [12, 18, 24, 40, 46, 52];
+          gxList.forEach((gx, idx) => {
+            pRect(gx, 4 + (idx % 2) * 2, 2, 10, GLOOM_GRY);
+          });
+          pRect(10, 20, 10, 3, INK);
+          pRect(44, 20, 10, 3, INK);
+          pRect(11, 24, 8, 2, GLOOM_GRY);
+          pRect(45, 24, 8, 2, GLOOM_GRY);
+          drawNose(43);
+          pRect(27, 49, 10, 3, INK);
+        } else if (faceId === 'happy') {
+          pLine(10, 23, 15, 17, 1.4, INK);
+          pLine(15, 17, 20, 23, 1.4, INK);
+          pLine(44, 23, 49, 17, 1.4, INK);
+          pLine(49, 17, 54, 23, 1.4, INK);
+          drawBlush(31);
+          drawNose(42);
+          pLine(25, 48, 32, 50, 1.3, INK);
+          pLine(32, 50, 39, 48, 1.3, INK);
+          pDisk(32, 52.5, 3.4, INK);
+          pDisk(32, 53, 2.2, MOUTH_PNK);
+        } else if (faceId === 'fierce') {
+          pLine(9, 12, 21, 18, 1.6, INK);
+          pLine(55, 12, 43, 18, 1.6, INK);
+          pDisk(15, 22, 2.9, INK);
+          pDisk(49, 22, 2.9, INK);
+          drawNose(38);
+          pRect(22, 43, 20, 13, INK);
+          pRect(24, 45, 16, 9, MOUTH_PNK);
+          pRect(25, 45, 3, 4, WHITE);
+          pRect(36, 45, 3, 4, WHITE);
+        } else if (faceId === 'devil') {
+          pLine(10, 14, 20, 18, 1.4, INK);
+          pLine(54, 14, 44, 18, 1.4, INK);
+          pDisk(15, 22, 2.9, INK);
+          pDisk(49, 22, 2.9, INK);
+          drawNose(42);
+          pLine(25, 50, 33, 51, 1.3, INK);
+          pLine(33, 51, 41, 46, 1.3, INK);
+        } else if (faceId === 'rose') {
+          pLine(10, 15, 20, 16, 1.25, INK);
+          pLine(44, 16, 54, 15, 1.25, INK);
+          pDisk(15, 21, 2.8, INK);
+          pDisk(49, 21, 2.8, INK);
+          drawNose(43);
+          pLine(27, 50, 33, 50, 1.2, INK);
+          pLine(33, 50, 39, 47, 1.2, INK);
+        } else if (faceId === 'sleep') {
+          pLine(10, 20, 15, 24, 1.35, INK);
+          pLine(15, 24, 20, 20, 1.35, INK);
+          pLine(44, 20, 49, 24, 1.35, INK);
+          pLine(49, 24, 54, 20, 1.35, INK);
+          drawBlush(31);
+          drawNose(42);
+          pDisk(32, 50, 2.6, INK);
+          pDisk(32, 50, 1.2, MOUTH_PNK);
+        }
+
+        const tex = new THREE.CanvasTexture(cvs);
+        tex.minFilter = THREE.NearestFilter;
+        tex.magFilter = THREE.NearestFilter;
+        tex.generateMipmaps = false;
+        tex.needsUpdate = true;
+
+        const mat = new THREE.ShaderMaterial({
+          uniforms: {
+            tFace:    { value: tex },
+            uSnapRes: globalRenderUniforms.uSnapRes,
+          },
+          vertexShader: `
+            uniform float uSnapRes;
+            varying vec2 vUv;
+            void main() {
+              vUv = uv;
+              vec4 clipPos = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+              if (uSnapRes > 0.5) {
+                vec2 grid = vec2(uSnapRes, uSnapRes * 0.75);
+                clipPos.xy = floor(clipPos.xy / clipPos.w * grid + 0.5) / grid * clipPos.w;
+              }
+              gl_Position = clipPos;
+            }
+          `,
+          fragmentShader: `
+            uniform sampler2D tFace;
+            varying vec2 vUv;
+            void main() {
+              vec4 c = texture2D(tFace, vUv);
+              if (c.a < 0.5) discard;
+              gl_FragColor = vec4(c.rgb, 1.0);
+            }
+          `,
+          side: THREE.FrontSide,
+          polygonOffset: true,
+          polygonOffsetFactor: -2,
+          polygonOffsetUnits: -2,
+        });
+        mat.userData.faceCanvas = cvs;
+        mat.userData.faceId = faceId;
+        faceMaterialCache[faceId] = mat;
+        return mat;
+      }
+
+      // =======================================================================
+      // 5. WEB AUDIO PROCEDURAL PIXEL SFX (NO EXTERNAL URLS)
+      // =======================================================================
+      let soundEnabled = true;
+      let audioCtx = null;
+
+      function ensureAudioCtx() {
+        if (!soundEnabled) return null;
+        try {
+          if (!audioCtx) {
+            const AC = window.AudioContext || window.webkitAudioContext;
+            if (!AC) return null;
+            audioCtx = new AC();
+          }
+          if (audioCtx.state === 'suspended') {
+            audioCtx.resume().catch(() => {});
+          }
+          return audioCtx;
+        } catch (_) {
+          return null;
+        }
+      }
+
+      function playSfx(type) {
+        const ctx = ensureAudioCtx();
+        if (!ctx) return;
+        try {
+          const now = ctx.currentTime;
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+
+          if (type === 'jump') {
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(320, now);
+            osc.frequency.exponentialRampToValueAtTime(640, now + 0.11);
+            gain.gain.setValueAtTime(0.06, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.13);
+            osc.start(now);
+            osc.stop(now + 0.14);
+          } else if (type === 'boing') {
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(220, now);
+            osc.frequency.exponentialRampToValueAtTime(760, now + 0.16);
+            gain.gain.setValueAtTime(0.11, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+            osc.start(now);
+            osc.stop(now + 0.23);
+          } else if (type === 'kick') {
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(190, now);
+            osc.frequency.exponentialRampToValueAtTime(75, now + 0.08);
+            gain.gain.setValueAtTime(0.09, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+            osc.start(now);
+            osc.stop(now + 0.10);
+          } else if (type === 'eat') {
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(523.25, now);
+            osc.frequency.setValueAtTime(659.25, now + 0.06);
+            osc.frequency.setValueAtTime(783.99, now + 0.12);
+            gain.gain.setValueAtTime(0.06, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+            osc.start(now);
+            osc.stop(now + 0.23);
+          } else if (type === 'spawn') {
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(440, now);
+            osc.frequency.setValueAtTime(554.37, now + 0.05);
+            osc.frequency.setValueAtTime(880, now + 0.10);
+            gain.gain.setValueAtTime(0.08, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.20);
+            osc.start(now);
+            osc.stop(now + 0.21);
+          } else {
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(580, now);
+            osc.frequency.exponentialRampToValueAtTime(780, now + 0.07);
+            gain.gain.setValueAtTime(0.06, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+            osc.start(now);
+            osc.stop(now + 0.10);
+          }
+        } catch (_) {}
+      }
+
+      // =======================================================================
+      // 6. SHARED LOW-POLY (DS/PS1) & SMOOTH GEOMETRY + MATERIAL LIBRARY
+      // =======================================================================
+      function buildSharedAssets() {
+        const furMat = createCelMaterial('#FFFFFF', '#E8F0FA', '#CDDCEC');
+
+        const mats = {
+          fur:        furMat,
+          halo:       createCelMaterial('#FFF199', '#FFD444', '#E5A81B'),
+          angelWing:  createCelMaterial('#FFFFFF', '#EBF3FD', '#D2E2F5'),
+          devilHorn:  createCelMaterial('#FF5C78', '#E02E4F', '#A31632'),
+          batWing:    createCelMaterial('#5A4E78', '#3F3559', '#2A233D'),
+          roseRed:    createCelMaterial('#FF6682', '#EA2C4E', '#B51535'),
+          stemGreen:  createCelMaterial('#6ED182', '#3DAE58', '#257D3D'),
+          ballRed:    createCelMaterial('#FF6E8E', '#EF4068', '#C62249'),
+          ballWhite:  createCelMaterial('#FFFFFF', '#EDF3FA', '#D4E1F0'),
+          cushTop:    createCelMaterial('#FFB4CE', '#FF82AE', '#E55B8C'),
+          cushSide:   createCelMaterial('#FF7FA8', '#EB5484', '#C43564'),
+          riceWhite:  createCelMaterial('#FFFFFF', '#F0F5FC', '#DAE5F2'),
+          bowlBlue:   createCelMaterial('#8CC2FF', '#5896E6', '#3A6FB8'),
+          trunk:      createCelMaterial('#C7976F', '#A87851', '#855A3A'),
+          leafA:      createCelMaterial('#98E69A', '#6ECC76', '#4CA858'),
+          leafB:      createCelMaterial('#B8F2AE', '#86DC88', '#5FB868'),
+          flPink:     createCelMaterial('#FFAEC8', '#FF7CA8', '#E05585'),
+          flYellow:   createCelMaterial('#FFF096', '#FFD24E', '#E3AC22'),
+          flSky:      createCelMaterial('#B2E4FF', '#7BC8F6', '#52A2D8'),
+          sparkle:    new THREE.MeshBasicMaterial({ color: 0xffe46b }),
+          steam:      new THREE.MeshBasicMaterial({ color: 0xffffff }),
+          wireframe:  new THREE.MeshBasicMaterial({
+            color: 0x1d4ed8,
+            wireframe: true,
+            transparent: true,
+            opacity: 0.42,
+            depthTest: true,
+          }),
+        };
+
+        const lowGeos = {
+          head: createLowPolyLathe(LOWPOLY_HEAD_RINGS, OCT_SQUIRCLE, HEAD_RX, HEAD_RZ),
+          facePatch: createLowPolyFacePatchGeometry(),
+          earL: createLowPolyLathe([
+            { y: -5.6, sx: 0.48, sz: 0.52, zOff:  1.45 },
+            { y: -2.4, sx: 0.98, sz: 1.00, zOff:  0.75 },
+            { y:  2.2, sx: 0.96, sz: 0.98, zOff: -0.30 },
+            { y:  5.4, sx: 0.54, sz: 0.56, zOff: -0.95 },
+          ], HEX_RING, 3.65, 4.75),
+          earR: createLowPolyLathe([
+            { y: -4.1, sx: 0.52, sz: 0.54, zOff:  1.25 },
+            { y: -1.6, sx: 1.00, sz: 1.00, zOff:  0.60 },
+            { y:  1.7, sx: 0.96, sz: 0.98, zOff: -0.25 },
+            { y:  4.0, sx: 0.56, sz: 0.56, zOff: -0.80 },
+          ], HEX_RING, 4.55, 4.65),
+          torsoBiped: createLowPolyLathe([
+            { y: -9.6, sx: 0.52, sz: 0.52 },
+            { y: -6.2, sx: 0.96, sz: 0.96 },
+            { y:  0.4, sx: 1.02, sz: 1.02 },
+            { y:  6.4, sx: 0.84, sz: 0.86 },
+            { y:  9.6, sx: 0.48, sz: 0.50 },
+          ], OCT_SQUIRCLE, 8.5, 9.2),
+          arm: createLowPolyLathe([
+            { y: -4.8, sx: 0.56, sz: 0.58 },
+            { y: -1.6, sx: 1.00, sz: 1.00 },
+            { y:  2.2, sx: 0.96, sz: 0.96 },
+            { y:  4.8, sx: 0.56, sz: 0.58 },
+          ], HEX_RING, 2.35, 3.25),
+          foot: createLowPolyLathe([
+            { y: -2.6, sx: 0.62, sz: 0.68 },
+            { y:  0.0, sx: 1.00, sz: 1.02 },
+            { y:  2.6, sx: 0.66, sz: 0.72 },
+          ], HEX_RING, 2.4, 3.85),
+          torsoQuad: createLowPolyLathe([
+            { y: -6.4, sx: 0.58, sz: 0.62 },
+            { y: -2.4, sx: 1.00, sz: 1.00 },
+            { y:  2.8, sx: 0.98, sz: 0.98 },
+            { y:  6.5, sx: 0.56, sz: 0.60 },
+          ], OCT_SQUIRCLE, 7.6, 11.4),
+          legQuad: createLowPolyLathe([
+            { y: -4.2, sx: 0.62, sz: 0.64 },
+            { y:  0.0, sx: 1.00, sz: 1.00 },
+            { y:  4.2, sx: 0.66, sz: 0.66 },
+          ], HEX_RING, 2.3, 2.5),
+          tailSingle: createLowPolyCurvedTail(),
+          halo: ensureFlatNormalAttribute(new THREE.TorusGeometry(6.6 * S, 1.15 * S, 5, 10), true),
+          angelWingLobe1: createLowPolyLathe([
+            { y: -2.4, sx: 0.5, sz: 0.6 },
+            { y:  0.0, sx: 1.0, sz: 1.0 },
+            { y:  2.4, sx: 0.5, sz: 0.6 },
+          ], HEX_RING, 4.4, 1.3),
+          angelWingLobe2: createLowPolyLathe([
+            { y: -1.9, sx: 0.5, sz: 0.6 },
+            { y:  0.0, sx: 1.0, sz: 1.0 },
+            { y:  1.9, sx: 0.5, sz: 0.6 },
+          ], HEX_RING, 3.2, 1.2),
+          devilHorn: ensureFlatNormalAttribute(new THREE.ConeGeometry(2.2 * S, 6.2 * S, 5), true),
+          batWingMain: createLowPolyLathe([
+            { y: -2.5, sx: 0.45, sz: 0.6 },
+            { y:  0.0, sx: 1.00, sz: 1.0 },
+            { y:  2.5, sx: 0.45, sz: 0.6 },
+          ], HEX_RING, 5.0, 0.95),
+          batWingTip: ensureFlatNormalAttribute(new THREE.ConeGeometry(2.2 * S, 4.8 * S, 4), true),
+          roseStem: ensureFlatNormalAttribute(new THREE.CylinderGeometry(0.55 * S, 0.55 * S, 10.2 * S, 5), true),
+          roseLeaf: ensureFlatNormalAttribute(new THREE.OctahedronGeometry(1.45 * S, 0), true),
+          roseBloom: ensureFlatNormalAttribute(new THREE.IcosahedronGeometry(2.45 * S, 0), true),
+        };
+
+        const smoothGeos = {
+          head: createSuperellipsoidGeometry(HEAD_RX, HEAD_RY, HEAD_RZ, HEAD_P, {
+            lonSegs: 28, latSegs: 20, cheekBulge: true,
+          }),
+          facePatch: createConformalFacePatchGeometry(),
+          earL: createSuperellipsoidGeometry(3.55, 5.6, 4.7, 2.25, {
+            lonSegs: 24, latSegs: 16, foldZ: 1.4,
+          }),
+          earR: createSuperellipsoidGeometry(4.45, 4.1, 4.6, 2.25, {
+            lonSegs: 24, latSegs: 16, foldZ: 1.2,
+          }),
+          torsoBiped: createSuperellipsoidGeometry(8.5, 9.8, 9.2, 2.25, {
+            lonSegs: 28, latSegs: 20,
+          }),
+          arm: createSuperellipsoidGeometry(2.25, 4.9, 3.2, 2.2, {
+            lonSegs: 20, latSegs: 14,
+          }),
+          foot: createSuperellipsoidGeometry(2.3, 2.7, 3.8, 2.25, {
+            lonSegs: 20, latSegs: 14,
+          }),
+          torsoQuad: createSuperellipsoidGeometry(7.6, 6.6, 11.4, 2.25, {
+            lonSegs: 28, latSegs: 20,
+          }),
+          legQuad: createSuperellipsoidGeometry(2.25, 4.3, 2.45, 2.2, {
+            lonSegs: 18, latSegs: 14,
+          }),
+          tail1: createSuperellipsoidGeometry(2.0, 2.1, 3.1, 2.2, { lonSegs: 18, latSegs: 12 }),
+          tail2: createSuperellipsoidGeometry(1.9, 2.3, 2.4, 2.2, { lonSegs: 18, latSegs: 12 }),
+          tail3: createSuperellipsoidGeometry(1.8, 2.5, 2.0, 2.2, { lonSegs: 18, latSegs: 12 }),
+          halo: ensureFlatNormalAttribute(new THREE.TorusGeometry(6.6 * S, 1.05 * S, 12, 28), false),
+          angelWingLobe1: createSuperellipsoidGeometry(4.4, 2.4, 1.25, 2.1, { lonSegs: 18, latSegs: 12 }),
+          angelWingLobe2: createSuperellipsoidGeometry(3.2, 1.9, 1.15, 2.1, { lonSegs: 18, latSegs: 12 }),
+          devilHorn: ensureFlatNormalAttribute(new THREE.ConeGeometry(2.1 * S, 6.2 * S, 14), false),
+          batWingMain: createSuperellipsoidGeometry(5.0, 2.6, 0.9, 2.0, { lonSegs: 18, latSegs: 12 }),
+          batWingTip: ensureFlatNormalAttribute(new THREE.ConeGeometry(2.2 * S, 4.8 * S, 10), false),
+          roseStem: ensureFlatNormalAttribute(new THREE.CylinderGeometry(0.52 * S, 0.52 * S, 10.2 * S, 10), false),
+          roseLeaf: createSuperellipsoidGeometry(1.7, 0.75, 1.2, 2.0, { lonSegs: 12, latSegs: 10 }),
+          roseBloom: createSuperellipsoidGeometry(2.5, 2.3, 2.4, 2.05, { lonSegs: 18, latSegs: 14 }),
+        };
+
+        return { mats, lowGeos, smoothGeos };
+      }
+
+      // =======================================================================
+      // 7. ARTICULATED 3D GANADI CHARACTER RIG (LOW-POLY + SMOOTH SWITCHABLE)
+      // =======================================================================
+      class GanadiCharacter {
+        constructor(assets, worldScene, charScene, isPlayer = false, initialStyle = 'lowpoly') {
+          this.assets = assets;
+          this.isPlayer = isPlayer;
+          this.styleMode = initialStyle;
+          this.wireframeOn = false;
+          this.swappableParts = [];
+          this.wireOverlays = [];
+          const { mats, lowGeos, smoothGeos } = assets;
+          const geos = initialStyle === 'smooth' ? smoothGeos : lowGeos;
+
+          this.root = new THREE.Group();
+          this.root.name = 'GanadiRoot';
+          charScene.add(this.root);
+
+          const makePart = (name, lowKey, smoothKey, mat) => {
+            const mesh = new THREE.Mesh(
+              initialStyle === 'smooth' ? smoothGeos[smoothKey] : lowGeos[lowKey],
+              mat
+            );
+            mesh.name = name;
+            this.swappableParts.push({ mesh, lowKey, smoothKey });
+
+            if (isPlayer) {
+              const wire = new THREE.Mesh(mesh.geometry, mats.wireframe);
+              wire.userData.isWireframe = true;
+              wire.scale.setScalar(1.008);
+              wire.visible = false;
+              mesh.add(wire);
+              this.wireOverlays.push({ wire, parent: mesh });
+            }
+            return mesh;
+          };
+
+          const shGeo = new THREE.CircleGeometry(1, 20);
+          shGeo.rotateX(-Math.PI / 2);
+          this.shadowMat = new THREE.MeshBasicMaterial({
+            color: 0x5d8d66,
+            transparent: true,
+            opacity: 0.28,
+            depthWrite: false,
+          });
+          this.shadowMesh = new THREE.Mesh(shGeo, this.shadowMat);
+          this.shadowMesh.position.y = 0.025;
+          worldScene.add(this.shadowMesh);
+
+          this.bodyGroup = new THREE.Group();
+          this.root.add(this.bodyGroup);
+
+          // ---- BIPEDAL BODY GROUP ----
+          this.bipedGroup = new THREE.Group();
+          this.bodyGroup.add(this.bipedGroup);
+
+          this.bipedTorso = makePart('Torso', 'torsoBiped', 'torsoBiped', mats.fur);
+          this.bipedTorso.position.set(0, 11.4 * S, -0.7 * S);
+          this.bipedGroup.add(this.bipedTorso);
+
+          this.armLPivot = new THREE.Group();
+          this.armLPivot.position.set(-7.2 * S, 16.8 * S, 1.5 * S);
+          const armLMesh = makePart('Arm_L', 'arm', 'arm', mats.fur);
+          armLMesh.position.set(-1.1 * S, -3.5 * S, 0.3 * S);
+          this.armLPivot.add(armLMesh);
+          this.bipedGroup.add(this.armLPivot);
+
+          this.armRPivot = new THREE.Group();
+          this.armRPivot.position.set(7.2 * S, 16.8 * S, 1.5 * S);
+          const armRMesh = makePart('Arm_R', 'arm', 'arm', mats.fur);
+          armRMesh.position.set(1.1 * S, -3.5 * S, 0.3 * S);
+          this.armRPivot.add(armRMesh);
+          this.bipedGroup.add(this.armRPivot);
+
+          this.footLPivot = new THREE.Group();
+          this.footLPivot.position.set(-2.9 * S, 4.4 * S, 1.8 * S);
+          const footLMesh = makePart('Foot_L', 'foot', 'foot', mats.fur);
+          footLMesh.position.set(0, -2.1 * S, 0.3 * S);
+          this.footLPivot.add(footLMesh);
+          this.bipedGroup.add(this.footLPivot);
+
+          this.footRPivot = new THREE.Group();
+          this.footRPivot.position.set(2.9 * S, 4.4 * S, 1.8 * S);
+          const footRMesh = makePart('Foot_R', 'foot', 'foot', mats.fur);
+          footRMesh.position.set(0, -2.1 * S, 0.3 * S);
+          this.footRPivot.add(footRMesh);
+          this.bipedGroup.add(this.footRPivot);
+
+          // ---- QUADRUPED BODY GROUP ----
+          this.quadGroup = new THREE.Group();
+          this.quadGroup.visible = false;
+          this.bodyGroup.add(this.quadGroup);
+
+          this.quadTorso = makePart('QuadTorso', 'torsoQuad', 'torsoQuad', mats.fur);
+          this.quadTorso.position.set(0, 10.6 * S, -1.5 * S);
+          this.quadGroup.add(this.quadTorso);
+
+          this.qLegs = [];
+          const qLegNames = ['Leg_FL', 'Leg_FR', 'Leg_BL', 'Leg_BR'];
+          const qLegCoords = [
+            [-4.6, 6.2,  5.6],
+            [ 4.6, 6.2,  5.6],
+            [-4.6, 6.2, -7.2],
+            [ 4.6, 6.2, -7.2],
+          ];
+          qLegCoords.forEach(([lx, ly, lz], idx) => {
+            const pv = new THREE.Group();
+            pv.position.set(lx * S, ly * S, lz * S);
+            const lm = makePart(qLegNames[idx], 'legQuad', 'legQuad', mats.fur);
+            lm.position.set(0, -2.6 * S, 0.4 * S);
+            pv.add(lm);
+            this.quadGroup.add(pv);
+            this.qLegs.push(pv);
+          });
+
+          // ---- CURLED FLUFFY TAIL ----
+          this.tailPivot = new THREE.Group();
+          this.tailPivot.position.set(0.3 * S, 8.0 * S, -8.4 * S);
+
+          this.tailLowMesh = new THREE.Mesh(lowGeos.tailSingle, mats.fur);
+          this.tailLowMesh.name = 'Tail';
+          this.tailLowMesh.visible = (initialStyle !== 'smooth');
+          if (isPlayer) {
+            const tw = new THREE.Mesh(lowGeos.tailSingle, mats.wireframe);
+            tw.userData.isWireframe = true;
+            tw.scale.setScalar(1.01);
+            tw.visible = false;
+            this.tailLowMesh.add(tw);
+            this.wireOverlays.push({ wire: tw, parent: this.tailLowMesh });
+          }
+          this.tailPivot.add(this.tailLowMesh);
+
+          this.tailSmoothGroup = new THREE.Group();
+          this.tailSmoothGroup.visible = (initialStyle === 'smooth');
+          const t1 = new THREE.Mesh(smoothGeos.tail1, mats.fur);
+          t1.name = 'Tail_Base'; t1.position.set(0, 0.7 * S, -1.8 * S);
+          const t2 = new THREE.Mesh(smoothGeos.tail2, mats.fur);
+          t2.name = 'Tail_Mid';  t2.position.set(0, 2.7 * S, -3.7 * S);
+          const t3 = new THREE.Mesh(smoothGeos.tail3, mats.fur);
+          t3.name = 'Tail_Tip';  t3.position.set(0, 4.9 * S, -4.4 * S);
+          this.tailSmoothGroup.add(t1, t2, t3);
+          this.tailPivot.add(this.tailSmoothGroup);
+          this.bodyGroup.add(this.tailPivot);
+
+          // ---- BACK WINGS (Angel & Devil) ----
+          this.angelWingsGroup = new THREE.Group();
+          this.angelWingsGroup.position.set(0, 14.0 * S, -8.6 * S);
+          this.angelWingsGroup.visible = false;
+          [-1, 1].forEach((side) => {
+            const wPv = new THREE.Group();
+            wPv.position.set(side * 2.5 * S, 0, 0);
+            const tag = side < 0 ? 'L' : 'R';
+            const l1 = makePart(`AngelWing1_${tag}`, 'angelWingLobe1', 'angelWingLobe1', mats.angelWing);
+            l1.position.set(side * 4.4 * S, 0.8 * S, -0.5 * S);
+            l1.rotation.z = side * 0.25;
+            const l2 = makePart(`AngelWing2_${tag}`, 'angelWingLobe2', 'angelWingLobe2', mats.angelWing);
+            l2.position.set(side * 7.2 * S, 2.6 * S, -0.8 * S);
+            l2.rotation.z = side * 0.45;
+            wPv.add(l1, l2);
+            this.angelWingsGroup.add(wPv);
+          });
+          this.bodyGroup.add(this.angelWingsGroup);
+
+          this.devilWingsGroup = new THREE.Group();
+          this.devilWingsGroup.position.set(0, 14.0 * S, -8.6 * S);
+          this.devilWingsGroup.visible = false;
+          [-1, 1].forEach((side) => {
+            const wPv = new THREE.Group();
+            wPv.position.set(side * 2.4 * S, 0, 0);
+            const tag = side < 0 ? 'L' : 'R';
+            const bm = makePart(`DevilWing1_${tag}`, 'batWingMain', 'batWingMain', mats.batWing);
+            bm.position.set(side * 4.8 * S, 1.0 * S, -0.5 * S);
+            bm.rotation.z = side * 0.32;
+            const bt = makePart(`DevilWing2_${tag}`, 'batWingTip', 'batWingTip', mats.batWing);
+            bt.position.set(side * 8.4 * S, 3.0 * S, -0.7 * S);
+            bt.rotation.z = -side * 0.9;
+            wPv.add(bm, bt);
+            this.devilWingsGroup.add(wPv);
+          });
+          this.bodyGroup.add(this.devilWingsGroup);
+
+          // ---- ARTICULATED HEAD GROUP ----
+          this.headPivot = new THREE.Group();
+          this.headPivot.position.set(0, HEAD_PIVOT_Y * S, 0);
+          this.bodyGroup.add(this.headPivot);
+
+          this.headMesh = makePart('Head', 'head', 'head', mats.fur);
+          this.headMesh.position.set(0, HEAD_LOCAL_CY * S, 0);
+          this.headPivot.add(this.headMesh);
+
+          this.currentFace = 'normal';
+          this.faceMesh = new THREE.Mesh(geos.facePatch, getFaceMaterial('normal'));
+          this.faceMesh.name = 'Face';
+          this.swappableParts.push({ mesh: this.faceMesh, lowKey: 'facePatch', smoothKey: 'facePatch' });
+          this.headPivot.add(this.faceMesh);
+
+          this.earLPivot = new THREE.Group();
+          this.earLPivot.position.set(-10.8 * S, (40.5 - HEAD_PIVOT_Y) * S, 2.6 * S);
+          const earLMesh = makePart('Ear_L', 'earL', 'earL', mats.fur);
+          earLMesh.position.set(-2.2 * S, -2.3 * S, 1.8 * S);
+          earLMesh.rotation.set(-12 * RAD, 0, -28 * RAD);
+          this.earLPivot.add(earLMesh);
+          this.headPivot.add(this.earLPivot);
+
+          this.earRPivot = new THREE.Group();
+          this.earRPivot.position.set(10.8 * S, (41.2 - HEAD_PIVOT_Y) * S, 2.6 * S);
+          const earRMesh = makePart('Ear_R', 'earR', 'earR', mats.fur);
+          earRMesh.position.set(2.0 * S, -1.2 * S, 1.6 * S);
+          earRMesh.rotation.set(-10 * RAD, 0, 18 * RAD);
+          this.earRPivot.add(earRMesh);
+          this.headPivot.add(this.earRPivot);
+
+          // ---- HEAD 3D PROPS (Halo / Horns / Rose) ----
+          this.haloMesh = makePart('Halo', 'halo', 'halo', mats.halo);
+          this.haloMesh.rotation.x = Math.PI / 2;
+          this.haloMesh.position.set(0, (49.2 - HEAD_PIVOT_Y) * S, -0.4 * S);
+          this.haloMesh.visible = false;
+          this.headPivot.add(this.haloMesh);
+
+          this.devilHornsGroup = new THREE.Group();
+          this.devilHornsGroup.visible = false;
+          [-1, 1].forEach((side) => {
+            const h = makePart(`DevilHorn_${side < 0 ? 'L' : 'R'}`, 'devilHorn', 'devilHorn', mats.devilHorn);
+            h.position.set(side * 6.5 * S, (47.0 - HEAD_PIVOT_Y) * S, 1.0 * S);
+            h.rotation.z = -side * 0.34;
+            h.rotation.x = 0.14;
+            this.devilHornsGroup.add(h);
+          });
+          this.headPivot.add(this.devilHornsGroup);
+
+          this.roseGroup = new THREE.Group();
+          this.roseGroup.position.set(0.6 * S, (26.6 - HEAD_PIVOT_Y) * S, 11.4 * S);
+          this.roseGroup.visible = false;
+          const rStem = makePart('Rose_Stem', 'roseStem', 'roseStem', mats.stemGreen);
+          rStem.position.set(3.4 * S, 0.2 * S, 3.4 * S);
+          rStem.rotation.set(Math.PI / 2 - 0.14, 0, -0.78);
+          const rLeaf = makePart('Rose_Leaf', 'roseLeaf', 'roseLeaf', mats.stemGreen);
+          rLeaf.position.set(3.2 * S, -0.5 * S, 3.6 * S);
+          rLeaf.rotation.set(0.2, 0.5, -0.4);
+          const rBloom = makePart('Rose_Bloom', 'roseBloom', 'roseBloom', mats.roseRed);
+          rBloom.position.set(7.0 * S, 0.8 * S, 6.8 * S);
+          this.roseGroup.add(rStem, rLeaf, rBloom);
+          this.headPivot.add(this.roseGroup);
+
+          this.pos = new THREE.Vector3(0, 0, 0);
+          this.vel = new THREE.Vector3(0, 0, 0);
+          this.yaw = 0;
+          this.onGround = true;
+          this.quadMode = false;
+          this.quadBlend = 0;
+          this.activeEmote = 'normal';
+          this.animPhase = Math.random() * 10;
+
+          this.aiTimer = 0.5 + Math.random() * 2.0;
+          this.aiTargetYaw = Math.random() * Math.PI * 2;
+          this.aiMode = 'chaseBall';
+        }
+
+        setStyle(styleMode) {
+          this.styleMode = styleMode;
+          const isSmooth = (styleMode === 'smooth');
+          const { lowGeos, smoothGeos } = this.assets;
+          for (let i = 0; i < this.swappableParts.length; i++) {
+            const item = this.swappableParts[i];
+            item.mesh.geometry = isSmooth ? smoothGeos[item.smoothKey] : lowGeos[item.lowKey];
+          }
+          this.tailLowMesh.visible = !isSmooth;
+          this.tailSmoothGroup.visible = isSmooth;
+          for (let i = 0; i < this.wireOverlays.length; i++) {
+            const ov = this.wireOverlays[i];
+            ov.wire.geometry = ov.parent.geometry;
+          }
+        }
+
+        setWireframe(enabled) {
+          this.wireframeOn = enabled;
+          for (let i = 0; i < this.wireOverlays.length; i++) {
+            this.wireOverlays[i].wire.visible = enabled;
+          }
+        }
+
+        getTriangleCount() {
+          let tris = 0;
+          const countTree = (obj) => {
+            if (!obj.visible) return;
+            if (obj.isMesh && !obj.userData.isWireframe && obj.geometry) {
+              const g = obj.geometry;
+              tris += g.index ? (g.index.count / 3) : (g.attributes.position.count / 3);
+            }
+            for (let i = 0; i < obj.children.length; i++) {
+              countTree(obj.children[i]);
+            }
+          };
+          countTree(this.root);
+          return Math.round(tris);
+        }
+
+        setFace(faceId) {
+          if (this.currentFace === faceId) return;
+          this.currentFace = faceId;
+          this.faceMesh.material = getFaceMaterial(faceId);
+        }
+
+        setProp(propType) {
+          this.haloMesh.visible = (propType === 'angel');
+          this.angelWingsGroup.visible = (propType === 'angel');
+          this.devilHornsGroup.visible = (propType === 'devil');
+          this.devilWingsGroup.visible = (propType === 'devil');
+          this.roseGroup.visible = (propType === 'rose');
+        }
+
+        setEmote(emoteId) {
+          const em = EMOTE_BY_ID[emoteId] || EMOTES[0];
+          this.activeEmote = em.id;
+          this.setFace(em.face);
+          this.setProp(em.prop);
+        }
+
+        setVisible(v) {
+          this.root.visible = v;
+          this.shadowMesh.visible = v;
+        }
+
+        dispose(worldScene, charScene) {
+          charScene.remove(this.root);
+          worldScene.remove(this.shadowMesh);
+          this.shadowMat.dispose();
+        }
+
+        updateAnimation(dt, speed, sprinting, isStudioMode) {
+          const qTarget = this.quadMode ? 1 : 0;
+          this.quadBlend += (qTarget - this.quadBlend) * Math.min(1, dt * 11);
+          const qb = this.quadBlend;
+
+          this.bipedGroup.visible = qb < 0.96;
+          this.quadGroup.visible = qb > 0.04;
+          const bScale = Math.max(0.001, 1.0 - qb);
+          const qScale = Math.max(0.001, qb);
+          this.bipedGroup.scale.set(bScale, bScale, bScale);
+          this.quadGroup.scale.set(qScale, qScale, qScale);
+
+          const moving = speed > 0.25;
+          const rate = moving ? (sprinting ? 14.5 : 9.8) : 3.4;
+          this.animPhase += dt * rate;
+          const t = this.animPhase;
+          const s = Math.sin(t);
+          const c = Math.cos(t);
+
+          const em = EMOTE_BY_ID[this.activeEmote] || EMOTES[0];
+          const pose = moving ? (sprinting ? 'run' : 'walk') : (!this.onGround ? 'jump' : em.pose);
+
+          if (!this.onGround) {
+            this.setFace(this.vel.y >= 0 ? 'happy' : 'normal');
+          } else if (moving && sprinting) {
+            this.setFace('happy');
+          } else if (moving) {
+            this.setFace((em.face === 'sleep' || em.face === 'geso') ? 'normal' : em.face);
+          } else {
+            this.setFace(em.face);
+          }
+
+          let bodyY = 0;
+          let bodyPitch = 0, bodyRoll = 0;
+          let headPitch = 0, headRoll = 0, headYaw = 0;
+          let armLP = 0, armRP = 0, armLZ = -0.18, armRZ = 0.18;
+          let footLP = 0, footRP = 0;
+          let earLFlap = 0, earRFlap = 0, earBack = 0;
+          let tailWag = s * 0.26, tailPitch = 0;
+
+          if (pose === 'idle') {
+            bodyY = Math.sin(t) * 0.45 * S;
+            earLFlap = Math.sin(t) * 0.05;
+            earRFlap = Math.sin(t) * 0.05;
+          } else if (pose === 'walk') {
+            bodyY = Math.abs(s) * 0.9 * S;
+            bodyRoll = s * 0.07;
+            bodyPitch = 0.06;
+            headRoll = -s * 0.04;
+            armLP = s * 0.65;
+            armRP = -s * 0.65;
+            footLP = -s * 0.62;
+            footRP = s * 0.62;
+            earLFlap = Math.abs(s) * 0.14;
+            earRFlap = Math.abs(c) * 0.14;
+            tailWag = s * 0.48;
+          } else if (pose === 'run') {
+            bodyY = Math.abs(s) * 1.45 * S;
+            bodyPitch = 0.19;
+            bodyRoll = s * 0.10;
+            headPitch = -0.10;
+            armLP = s * 0.98;
+            armRP = -s * 0.98;
+            armLZ = -0.32; armRZ = 0.32;
+            footLP = -s * 0.95;
+            footRP = s * 0.95;
+            earBack = -0.28;
+            earLFlap = 0.22 + Math.abs(s) * 0.18;
+            earRFlap = 0.22 + Math.abs(c) * 0.18;
+            tailWag = s * 0.56;
+          } else if (pose === 'jump') {
+            const rising = this.vel.y >= 0;
+            bodyPitch = rising ? -0.09 : 0.10;
+            armLP = -0.5; armRP = -0.5;
+            armLZ = rising ? -1.45 : -0.85;
+            armRZ = rising ? 1.45 : 0.85;
+            footLP = rising ? 0.25 : -0.25;
+            footRP = rising ? -0.25 : 0.25;
+            earLFlap = rising ? -0.10 : 0.42;
+            earRFlap = rising ? -0.10 : 0.42;
+          } else if (pose === 'hug') {
+            bodyY = Math.sin(t) * 0.35 * S;
+            headPitch = -0.08;
+            headRoll = Math.sin(t) * 0.07;
+            armLP = -1.25; armRP = -1.25;
+            armLZ = -0.55; armRZ = 0.55;
+            tailWag = Math.sin(t * 2.0) * 0.42;
+          } else if (pose === 'du') {
+            headPitch = 0.08;
+            headRoll = -0.09 + Math.sin(t * 2.6) * 0.03;
+            armLP = -0.35; armRP = -0.35;
+            armLZ = -0.20; armRZ = 0.20;
+            earLFlap = -0.12; earRFlap = -0.10;
+            tailPitch = -0.22;
+          } else if (pose === 'cry') {
+            bodyY = Math.abs(s) * 0.55 * S;
+            headPitch = -0.06;
+            headRoll = Math.sin(t * 2.6) * 0.12;
+            armLP = -0.75 + Math.sin(t * 2.6) * 0.38;
+            armRP = -0.75 - Math.sin(t * 2.6) * 0.38;
+            armLZ = -1.15; armRZ = 1.15;
+            footLP = Math.sin(t * 2.6) * 0.28;
+            footRP = -Math.sin(t * 2.6) * 0.28;
+          } else if (pose === 'geso') {
+            bodyY = -0.5 * S;
+            bodyPitch = 0.11;
+            headPitch = 0.15;
+            headRoll = 0.12;
+            armLZ = -0.04; armRZ = 0.04;
+            earLFlap = -0.20; earRFlap = -0.18;
+            tailPitch = -0.30;
+            tailWag = 0;
+          } else if (pose === 'dance') {
+            bodyY = Math.abs(Math.sin(t * 1.8)) * 1.3 * S;
+            bodyRoll = Math.sin(t * 1.8) * 0.14;
+            headRoll = Math.sin(t * 1.8) * 0.12;
+            headYaw = Math.sin(t * 1.8) * 0.10;
+            armLZ = -0.55 - Math.max(0, Math.sin(t * 1.8)) * 1.15;
+            armRZ = 0.55 + Math.max(0, -Math.sin(t * 1.8)) * 1.15;
+            armLP = -0.35; armRP = -0.35;
+            earLFlap = 0.18 + Math.sin(t * 1.8) * 0.16;
+            earRFlap = 0.18 - Math.sin(t * 1.8) * 0.16;
+            tailWag = Math.sin(t * 2.6) * 0.52;
+          } else if (pose === 'fierce') {
+            bodyY = Math.abs(Math.sin(t * 2.2)) * 0.65 * S;
+            bodyPitch = 0.14;
+            headPitch = -0.08;
+            headRoll = Math.sin(t * 2.4) * 0.07;
+            armLP = -1.0; armRP = -1.0;
+            armLZ = -1.15; armRZ = 1.15;
+            earLFlap = 0.28; earRFlap = 0.28;
+          } else if (pose === 'angel') {
+            bodyY = (1.8 + Math.sin(t * 1.4) * 0.9) * S;
+            headRoll = Math.sin(t * 1.2) * 0.06;
+            armLP = -0.45; armRP = -0.45;
+            armLZ = -0.65; armRZ = 0.65;
+            earLFlap = 0.12 + Math.sin(t * 1.4) * 0.08;
+            earRFlap = 0.12 + Math.sin(t * 1.4) * 0.08;
+          } else if (pose === 'devil') {
+            bodyY = Math.sin(t * 1.6) * 0.5 * S;
+            bodyPitch = 0.07;
+            headPitch = -0.06;
+            headRoll = Math.sin(t * 1.4) * 0.08;
+            armLP = -0.7; armRP = -0.7;
+            armLZ = -0.65; armRZ = 0.65;
+            earLFlap = 0.16; earRFlap = 0.16;
+            tailWag = Math.sin(t * 2.3) * 0.45;
+          } else if (pose === 'rose') {
+            bodyRoll = Math.sin(t * 0.8) * 0.04;
+            headRoll = 0.11;
+            headPitch = -0.05;
+            armLP = -0.75; armLZ = -0.58;
+            armRP = -0.15; armRZ = 0.18;
+          } else if (pose === 'sit') {
+            bodyY = -1.6 * S;
+            headRoll = -0.05;
+            armLP = -0.35; armRP = -0.35;
+            armLZ = -0.25; armRZ = 0.25;
+            footLP = -1.32; footRP = -1.32;
+            tailWag = Math.sin(t * 1.6) * 0.34;
+          } else if (pose === 'sleep') {
+            bodyY = -1.7 * S;
+            bodyPitch = 0.10;
+            headPitch = 0.22 + Math.sin(t * 0.7) * 0.05;
+            headRoll = 0.16;
+            armLP = -0.25; armRP = -0.25;
+            footLP = -1.32; footRP = -1.32;
+            earLFlap = -0.14; earRFlap = -0.14;
+            tailWag = Math.sin(t * 0.7) * 0.08;
+          }
+
+          this.bodyGroup.position.y = bodyY;
+          this.bodyGroup.rotation.set(bodyPitch * (1 - qb * 0.6), 0, bodyRoll);
+
+          this.armLPivot.rotation.set(armLP, 0, armLZ);
+          this.armRPivot.rotation.set(armRP, 0, armRZ);
+          this.footLPivot.rotation.set(footLP, 0, 0);
+          this.footRPivot.rotation.set(footRP, 0, 0);
+
+          const qStride = moving ? s * (sprinting ? 0.75 : 0.55) : 0;
+          this.qLegs[0].rotation.x =  qStride;
+          this.qLegs[1].rotation.x = -qStride;
+          this.qLegs[2].rotation.x = -qStride;
+          this.qLegs[3].rotation.x =  qStride;
+
+          this.headPivot.position.set(
+            0,
+            THREE.MathUtils.lerp(HEAD_PIVOT_Y, 13.5, qb) * S,
+            THREE.MathUtils.lerp(0.0, 9.2, qb) * S
+          );
+          this.headPivot.rotation.set(headPitch, headYaw, headRoll);
+
+          this.tailPivot.position.set(
+            0.3 * S,
+            THREE.MathUtils.lerp(8.0, 12.6, qb) * S,
+            THREE.MathUtils.lerp(-8.4, -11.4, qb) * S
+          );
+          this.tailPivot.rotation.set(tailPitch, tailWag, 0);
+
+          this.angelWingsGroup.position.set(
+            0,
+            THREE.MathUtils.lerp(14.0, 16.5, qb) * S,
+            THREE.MathUtils.lerp(-8.6, -2.5, qb) * S
+          );
+          this.devilWingsGroup.position.copy(this.angelWingsGroup.position);
+
+          this.earLPivot.rotation.set(earBack, 0, -earLFlap);
+          this.earRPivot.rotation.set(earBack, 0, earRFlap);
+
+          if (this.haloMesh.visible) {
+            this.haloMesh.position.y = (49.2 - HEAD_PIVOT_Y + Math.sin(t * 2.0) * 0.7) * S;
+            const wf = Math.sin(t * 2.6) * 0.25;
+            this.angelWingsGroup.children[0].rotation.y =  wf;
+            this.angelWingsGroup.children[1].rotation.y = -wf;
+          }
+          if (this.devilWingsGroup.visible) {
+            const wf = Math.sin(t * 2.8) * 0.22;
+            this.devilWingsGroup.children[0].rotation.y =  wf;
+            this.devilWingsGroup.children[1].rotation.y = -wf;
+          }
+
+          this.root.position.copy(this.pos);
+          this.root.rotation.y = this.yaw;
+
+          const hFactor = clamp(1.0 - this.pos.y * 0.14, 0.42, 1.0);
+          const rxSh = THREE.MathUtils.lerp(0.68, 0.74, qb) * hFactor;
+          const rzSh = THREE.MathUtils.lerp(0.60, 0.96, qb) * hFactor;
+          this.shadowMesh.position.set(this.pos.x, 0.025, this.pos.z);
+          this.shadowMesh.rotation.y = this.yaw;
+          this.shadowMesh.scale.set(rxSh, 1, rzSh);
+          this.shadowMat.color.setHex(isStudioMode ? 0x8ea4c2 : 0x5c8e66);
+          this.shadowMat.opacity = (isStudioMode ? 0.22 : 0.28) * hFactor;
+        }
+
+        getHeadTopWorldPos(target) {
+          const topY = THREE.MathUtils.lerp(50.5, 42.5, this.quadBlend) * S;
+          target.set(this.pos.x, this.pos.y + topY, this.pos.z);
+          return target;
+        }
+      }
+
+      // =======================================================================
+      // 8. MAIN APPLICATION & 2-PASS LOW-RES PIXEL-ART PIPELINE
+      // =======================================================================
+      function initApp() {
+        try {
+          if (typeof THREE === 'undefined') {
+            throw new Error('Three.jsの読み込みに失敗しました。ネットワーク環境を確認してください。');
+          }
+
+          const viewportWrap = document.getElementById('viewportWrap');
+          const canvas = document.getElementById('webglCanvas');
+
+          const renderer = new THREE.WebGLRenderer({
+            canvas: canvas,
+            antialias: false,
+            alpha: false,
+            powerPreference: 'high-performance',
+            preserveDrawingBuffer: true,
+          });
+          renderer.setPixelRatio(1);
+          renderer.autoClear = false;
+          renderer.outputEncoding = THREE.LinearEncoding;
+
+          const camera = new THREE.PerspectiveCamera(30, 1, 0.5, 160);
+
+          const worldScene = new THREE.Scene();
+          const charScene = new THREE.Scene();
+
+          const assets = buildSharedAssets();
+          const { mats } = assets;
+
+          // ---- SKY GRADIENT DOME ----
+          const skyUniforms = {
+            uTop:    { value: new THREE.Color('#9cd7ff') },
+            uBottom: { value: new THREE.Color('#e8f7ff') },
+          };
+          const skyDome = new THREE.Mesh(
+            new THREE.SphereGeometry(95, 24, 16),
+            new THREE.ShaderMaterial({
+              uniforms: skyUniforms,
+              side: THREE.BackSide,
+              depthWrite: false,
+              vertexShader: `
+                varying vec3 vWorldPos;
+                void main() {
+                  vWorldPos = position;
+                  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+              `,
+              fragmentShader: `
+                uniform vec3 uTop;
+                uniform vec3 uBottom;
+                varying vec3 vWorldPos;
+                void main() {
+                  float h = clamp(normalize(vWorldPos).y * 1.35 + 0.18, 0.0, 1.0);
+                  gl_FragColor = vec4(mix(uBottom, uTop, h), 1.0);
+                }
+              `,
+            })
+          );
+          worldScene.add(skyDome);
+
+          // ---- WORLD MEADOW GROUP ----
+          const worldMeadowGroup = new THREE.Group();
+          worldScene.add(worldMeadowGroup);
+
+          const floorCvs = document.createElement('canvas');
+          floorCvs.width = 64;
+          floorCvs.height = 64;
+          const fctx = floorCvs.getContext('2d');
+          fctx.fillStyle = '#bdf0b5';
+          fctx.fillRect(0, 0, 64, 64);
+          fctx.fillStyle = '#a8e4a0';
+          fctx.fillRect(0, 0, 32, 32);
+          fctx.fillRect(32, 32, 32, 32);
+          const floorTex = new THREE.CanvasTexture(floorCvs);
+          floorTex.wrapS = floorTex.wrapT = THREE.RepeatWrapping;
+          floorTex.repeat.set(7, 7);
+          floorTex.minFilter = THREE.NearestFilter;
+          floorTex.magFilter = THREE.NearestFilter;
+          floorTex.generateMipmaps = false;
+
+          const floorMesh = new THREE.Mesh(
+            new THREE.BoxGeometry(WORLD_HALF * 2, 0.7, WORLD_HALF * 2),
+            new THREE.MeshBasicMaterial({ map: floorTex })
+          );
+          floorMesh.position.y = -0.35;
+          worldMeadowGroup.add(floorMesh);
+
+          const soilMesh = new THREE.Mesh(
+            ensureFlatNormalAttribute(new THREE.BoxGeometry(WORLD_HALF * 2 + 0.02, 0.9, WORLD_HALF * 2 + 0.02), true),
+            createCelMaterial('#d6ae85', '#be9369', '#9d744d')
+          );
+          soilMesh.position.y = -1.14;
+          worldMeadowGroup.add(soilMesh);
+
+          const plazaMesh = new THREE.Mesh(
+            new THREE.CylinderGeometry(2.5, 2.55, 0.04, 16),
+            new THREE.MeshBasicMaterial({ color: 0xfff8e6 })
+          );
+          plazaMesh.position.y = 0.005;
+          worldMeadowGroup.add(plazaMesh);
+
+          const treeTrunkGeo = ensureFlatNormalAttribute(new THREE.CylinderGeometry(0.22, 0.30, 1.3, 6), true);
+          const treeCanopy1 = ensureFlatNormalAttribute(new THREE.IcosahedronGeometry(0.84, 0), true);
+          const treeCanopy2 = ensureFlatNormalAttribute(new THREE.IcosahedronGeometry(0.56, 0), true);
+          const treeCoords = [
+            [-8.4, -8.2, 1.12],
+            [ 8.2, -7.8, 1.04],
+            [-8.6,  6.0, 0.98],
+            [ 8.4,  6.4, 1.08],
+            [ 0.2, -9.0, 0.96],
+          ];
+          const trees = [];
+          treeCoords.forEach(([tx, tz, ts]) => {
+            const tg = new THREE.Group();
+            const tr = new THREE.Mesh(treeTrunkGeo, mats.trunk);
+            tr.position.y = 0.65;
+            const c1 = new THREE.Mesh(treeCanopy1, mats.leafA);
+            c1.position.y = 1.65;
+            const c2 = new THREE.Mesh(treeCanopy2, mats.leafB);
+            c2.position.set(0.28, 2.15, 0.2);
+            const sh = new THREE.Mesh(
+              new THREE.CircleGeometry(1.1, 18).rotateX(-Math.PI / 2),
+              new THREE.MeshBasicMaterial({ color: 0x5c8e66, transparent: true, opacity: 0.22, depthWrite: false })
+            );
+            sh.position.y = 0.02;
+            tg.add(tr, c1, c2, sh);
+            tg.position.set(tx, 0, tz);
+            tg.scale.setScalar(ts);
+            worldMeadowGroup.add(tg);
+            trees.push({ x: tx, z: tz, r: 0.72 * ts });
+          });
+
+          const flStemGeo = ensureFlatNormalAttribute(new THREE.CylinderGeometry(0.03, 0.03, 0.26, 5), true);
+          const flPetalGeo = ensureFlatNormalAttribute(new THREE.OctahedronGeometry(0.09, 0), true);
+          const flCenterGeo = ensureFlatNormalAttribute(new THREE.OctahedronGeometry(0.07, 0), true);
+          let seed = 4201;
+          const rand = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
+          const petalMats = [mats.flPink, mats.flSky, mats.flYellow];
+          for (let i = 0; i < 26; i++) {
+            const fx = (rand() * 2 - 1) * (WORLD_HALF - 1.3);
+            const fz = (rand() * 2 - 1) * (WORLD_HALF - 1.3);
+            if (Math.hypot(fx, fz) < 2.9) continue;
+            if (Math.hypot(fx + 3.8, fz + 2.4) < 1.6) continue;
+            if (Math.hypot(fx - 3.8, fz + 2.8) < 1.6) continue;
+            const fg = new THREE.Group();
+            const st = new THREE.Mesh(flStemGeo, mats.stemGreen);
+            st.position.y = 0.13;
+            fg.add(st);
+            const pm = petalMats[i % petalMats.length];
+            for (let k = 0; k < 4; k++) {
+              const ang = (k * Math.PI) / 2;
+              const pt = new THREE.Mesh(flPetalGeo, pm);
+              pt.position.set(Math.cos(ang) * 0.10, 0.27, Math.sin(ang) * 0.10);
+              fg.add(pt);
+            }
+            const ct = new THREE.Mesh(flCenterGeo, mats.flYellow);
+            ct.position.y = 0.29;
+            fg.add(ct);
+            fg.position.set(fx, 0, fz);
+            worldMeadowGroup.add(fg);
+          }
+
+          // ---- STUDIO PEDESTAL ----
+          const studioPedestalGroup = new THREE.Group();
+          studioPedestalGroup.visible = false;
+          worldScene.add(studioPedestalGroup);
+          const pedestalTop = new THREE.Mesh(
+            ensureFlatNormalAttribute(new THREE.CylinderGeometry(2.05, 2.2, 0.22, 12), true),
+            createCelMaterial('#ffffff', '#edf3fb', '#d5e2f2')
+          );
+          pedestalTop.position.y = -0.11;
+          studioPedestalGroup.add(pedestalTop);
+
+          // ---- INTERACTIVE FOREGROUND PROPS ----
+          const worldPropsGroup = new THREE.Group();
+          charScene.add(worldPropsGroup);
+
+          // 1. Low-Poly Bouncy Red-and-White Beach Ball
+          const ballGroup = new THREE.Group();
+          const ballRadius = 0.34;
+          const ballMain = new THREE.Mesh(ensureFlatNormalAttribute(new THREE.IcosahedronGeometry(ballRadius, 1), true), mats.ballRed);
+          const ballBand1 = new THREE.Mesh(ensureFlatNormalAttribute(new THREE.TorusGeometry(ballRadius * 0.96, 0.055, 6, 12), true), mats.ballWhite);
+          const ballBand2 = new THREE.Mesh(ensureFlatNormalAttribute(new THREE.TorusGeometry(ballRadius * 0.96, 0.055, 6, 12), true), mats.ballWhite);
+          ballBand2.rotation.y = Math.PI / 2;
+          ballGroup.add(ballMain, ballBand1, ballBand2);
+          worldPropsGroup.add(ballGroup);
+
+          const ballShadowMat = new THREE.MeshBasicMaterial({
+            color: 0x5c8e66, transparent: true, opacity: 0.26, depthWrite: false,
+          });
+          const ballShadow = new THREE.Mesh(
+            new THREE.CircleGeometry(ballRadius * 1.05, 18).rotateX(-Math.PI / 2),
+            ballShadowMat
+          );
+          ballShadow.position.y = 0.025;
+          worldMeadowGroup.add(ballShadow);
+
+          const ballState = {
+            pos: new THREE.Vector3(2.8, ballRadius, 2.0),
+            vel: new THREE.Vector3(0, 0, 0),
+            radius: ballRadius,
+          };
+          ballGroup.position.copy(ballState.pos);
+
+          // 2. Low-Poly Bouncy Pink Cushion Trampoline
+          const cushionGroup = new THREE.Group();
+          const cushBase = new THREE.Mesh(
+            createLowPolyLathe([
+              { y: -4.0, sx: 0.78, sz: 0.78 },
+              { y:  0.0, sx: 1.00, sz: 1.00 },
+              { y:  3.6, sx: 0.88, sz: 0.88 },
+            ], OCT_SQUIRCLE, 15.5, 15.5),
+            mats.cushSide
+          );
+          cushBase.position.y = 3.2 * S;
+          const cushTop = new THREE.Mesh(
+            createLowPolyLathe([
+              { y: -1.6, sx: 0.96, sz: 0.96 },
+              { y:  1.8, sx: 0.82, sz: 0.82 },
+            ], OCT_SQUIRCLE, 13.5, 13.5),
+            mats.cushTop
+          );
+          cushTop.position.y = 5.4 * S;
+          cushionGroup.add(cushBase, cushTop);
+          cushionGroup.position.set(-3.8, 0, -2.4);
+          worldPropsGroup.add(cushionGroup);
+
+          const cushShadow = new THREE.Mesh(
+            new THREE.CircleGeometry(0.92, 20).rotateX(-Math.PI / 2),
+            new THREE.MeshBasicMaterial({ color: 0x5c8e66, transparent: true, opacity: 0.25, depthWrite: false })
+          );
+          cushShadow.position.set(-3.8, 0.024, -2.4);
+          worldMeadowGroup.add(cushShadow);
+
+          const cushionState = {
+            pos: cushionGroup.position.clone(),
+            radius: 0.82,
+            squash: 0,
+          };
+
+          // 3. Low-Poly Steaming 3D Bowl of White Rice (白いごはん / 쌀밥!)
+          const riceGroup = new THREE.Group();
+          const bowlFoot = new THREE.Mesh(ensureFlatNormalAttribute(new THREE.CylinderGeometry(0.26, 0.24, 0.12, 8), true), mats.bowlBlue);
+          bowlFoot.position.y = 0.06;
+          const bowlBody = new THREE.Mesh(ensureFlatNormalAttribute(new THREE.CylinderGeometry(0.46, 0.27, 0.34, 8), true), mats.riceWhite);
+          bowlBody.position.y = 0.28;
+          const bowlRim = new THREE.Mesh(ensureFlatNormalAttribute(new THREE.TorusGeometry(0.45, 0.045, 5, 8), true), mats.bowlBlue);
+          bowlRim.rotation.x = Math.PI / 2;
+          bowlRim.position.y = 0.42;
+          const riceMound = new THREE.Mesh(
+            createLowPolyLathe([
+              { y: -4.2, sx: 0.95, sz: 0.95 },
+              { y:  1.2, sx: 0.88, sz: 0.88 },
+              { y:  5.2, sx: 0.46, sz: 0.46 },
+            ], OCT_SQUIRCLE, 8.2, 8.2),
+            mats.riceWhite
+          );
+          riceMound.position.y = 0.50;
+          riceGroup.add(bowlFoot, bowlBody, bowlRim, riceMound);
+          riceGroup.position.set(3.8, 0, -2.8);
+          worldPropsGroup.add(riceGroup);
+
+          const riceShadow = new THREE.Mesh(
+            new THREE.CircleGeometry(0.55, 18).rotateX(-Math.PI / 2),
+            new THREE.MeshBasicMaterial({ color: 0x5c8e66, transparent: true, opacity: 0.25, depthWrite: false })
+          );
+          riceShadow.position.set(3.8, 0.024, -2.8);
+          worldMeadowGroup.add(riceShadow);
+
+          const riceState = {
+            pos: riceGroup.position.clone(),
+            radius: 0.54,
+            cooldown: 0,
+            hop: 0,
+          };
+
+          const steamPuffs = [];
+          const steamGeo = new THREE.SphereGeometry(0.085, 8, 8);
+          for (let i = 0; i < 4; i++) {
+            const sm = new THREE.Mesh(steamGeo, mats.steam);
+            worldMeadowGroup.add(sm);
+            steamPuffs.push({ mesh: sm, phase: i * 0.25 });
+          }
+
+          const sparkles = [];
+          const sparkleGeo = new THREE.OctahedronGeometry(0.11, 0);
+          function spawnRiceSparkles(origin) {
+            for (let i = 0; i < 12; i++) {
+              const m = new THREE.Mesh(sparkleGeo, mats.sparkle);
+              const ang = (i / 12) * Math.PI * 2 + Math.random() * 0.3;
+              const spd = 1.4 + Math.random() * 2.0;
+              m.position.set(origin.x, origin.y + 0.85, origin.z);
+              worldPropsGroup.add(m);
+              sparkles.push({
+                mesh: m,
+                vx: Math.cos(ang) * spd,
+                vy: 2.8 + Math.random() * 2.4,
+                vz: Math.sin(ang) * spd,
+                life: 0.75 + Math.random() * 0.35,
+                maxLife: 1.0,
+              });
+            }
+          }
+
+          // ---- PLAYER GANADI + AUTONOMOUS AI CROWD ----
+          const player = new GanadiCharacter(assets, worldScene, charScene, true, 'lowpoly');
+          player.pos.set(0, 0, 0.6);
+          const crowd = [];
+
+          // ===================================================================
+          // 9. LOW-RES 2-PASS RENDER TARGETS & COMPOSITE 1px OUTLINE SHADER
+          // ===================================================================
+          let pixelScale = 3;
+          let viewW = Math.max(200, viewportWrap.clientWidth);
+          let viewH = Math.max(200, viewportWrap.clientHeight);
+          let lowW = Math.max(64, Math.floor(viewW / pixelScale));
+          let lowH = Math.max(64, Math.floor(viewH / pixelScale));
+
+          function makeLowResRT(w, h) {
+            return new THREE.WebGLRenderTarget(w, h, {
+              minFilter: THREE.NearestFilter,
+              magFilter: THREE.NearestFilter,
+              format: THREE.RGBAFormat,
+              type: THREE.UnsignedByteType,
+              depthBuffer: true,
+              stencilBuffer: false,
+            });
+          }
+
+          let worldRT = makeLowResRT(lowW, lowH);
+          let charRT  = makeLowResRT(lowW, lowH);
+
+          const postScene = new THREE.Scene();
+          const postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+
+          const compositeMat = new THREE.ShaderMaterial({
+            uniforms: {
+              tWorld:        { value: worldRT.texture },
+              tChar:         { value: charRT.texture },
+              uTexelSize:    { value: new THREE.Vector2(1 / lowW, 1 / lowH) },
+              uOutlineOn:    { value: 1.0 },
+              uOutlineColor: { value: new THREE.Vector3(0.133, 0.145, 0.196) },
+            },
+            vertexShader: `
+              varying vec2 vUv;
+              void main() {
+                vUv = uv;
+                gl_Position = vec4(position.xy, 0.0, 1.0);
+              }
+            `,
+            fragmentShader: `
+              uniform sampler2D tWorld;
+              uniform sampler2D tChar;
+              uniform vec2 uTexelSize;
+              uniform float uOutlineOn;
+              uniform vec3 uOutlineColor;
+              varying vec2 vUv;
+
+              void main() {
+                vec4 charCol = texture2D(tChar, vUv);
+                if (charCol.a > 0.5) {
+                  gl_FragColor = vec4(charCol.rgb, 1.0);
+                  return;
+                }
+                if (uOutlineOn > 0.5) {
+                  float aL = texture2D(tChar, vUv + vec2(-uTexelSize.x, 0.0)).a;
+                  float aR = texture2D(tChar, vUv + vec2( uTexelSize.x, 0.0)).a;
+                  float aU = texture2D(tChar, vUv + vec2(0.0,  uTexelSize.y)).a;
+                  float aD = texture2D(tChar, vUv + vec2(0.0, -uTexelSize.y)).a;
+                  if (max(max(aL, aR), max(aU, aD)) > 0.5) {
+                    gl_FragColor = vec4(uOutlineColor, 1.0);
+                    return;
+                  }
+                }
+                vec4 worldCol = texture2D(tWorld, vUv);
+                gl_FragColor = vec4(worldCol.rgb, 1.0);
+              }
+            `,
+            depthTest: false,
+            depthWrite: false,
+          });
+          postScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), compositeMat));
+
+          function rebuildRenderTargets() {
+            viewW = Math.max(200, viewportWrap.clientWidth);
+            viewH = Math.max(200, viewportWrap.clientHeight);
+            renderer.setSize(viewW, viewH, false);
+            camera.aspect = viewW / viewH;
+            camera.updateProjectionMatrix();
+
+            lowW = Math.max(64, Math.floor(viewW / pixelScale));
+            lowH = Math.max(64, Math.floor(viewH / pixelScale));
+
+            worldRT.dispose();
+            charRT.dispose();
+            worldRT = makeLowResRT(lowW, lowH);
+            charRT  = makeLowResRT(lowW, lowH);
+
+            compositeMat.uniforms.tWorld.value = worldRT.texture;
+            compositeMat.uniforms.tChar.value  = charRT.texture;
+            compositeMat.uniforms.uTexelSize.value.set(1 / lowW, 1 / lowH);
+          }
+
+          window.addEventListener('resize', rebuildRenderTargets);
+          if (window.ResizeObserver) {
+            new ResizeObserver(rebuildRenderTargets).observe(viewportWrap);
+          }
+          rebuildRenderTargets();
+
+          // ===================================================================
+          // 10. STATE, MOBILE-FIRST UI CONTROLS & SELF-CONTAINED HTML SAVER
+          // ===================================================================
+          const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+          const isCompactViewport = () => (window.innerWidth < 860 || window.innerHeight <= 500);
+
+          const appState = {
+            mode: 'world',
+            styleMode: 'lowpoly',
+            flatShading: true,
+            wireframeOn: false,
+            yawDeg: 35,
+            targetYawDeg: null,
+            pitchDeg: 22,
+            targetPitchDeg: null,
+            distance: window.innerWidth < 640 ? 11.2 : 10.0,
+            autoRotate: false,
+            outlineOn: true,
+            showVirtualPad: isTouchDevice || isCompactViewport(),
+            dashLock: false,
+            bubbleText: null,
+            bubbleTimer: 0,
+            keys: Object.create(null),
+            joy: { x: 0, y: 0, mag: 0, autoDash: false, pointerId: null },
+            canvasPointers: new Map(),
+            pinchStartDist: 0,
+            pinchStartZoom: 10.0,
+            lastSliderZoom: '',
+            lastSliderPitch: '',
+          };
+
+          const speechBubbleEl = document.getElementById('speechBubble');
+          const settingsDrawerEl = document.getElementById('settingsDrawer');
+          const drawerBackdropEl = document.getElementById('drawerBackdrop');
+          const virtualPadEl = document.getElementById('virtualPad');
+          const mobileEmoteBarEl = document.getElementById('mobileEmoteBar');
+          const sliderZoomEl = document.getElementById('sliderZoom');
+          const sliderPitchEl = document.getElementById('sliderPitch');
+          const zoomValLabelEl = document.getElementById('zoomValLabel');
+          const pitchValLabelEl = document.getElementById('pitchValLabel');
+          const chkVirtualPadEl = document.getElementById('chkVirtualPad');
+
+          function showToast(msg) {
+            const container = document.getElementById('toastContainer');
+            const el = document.createElement('div');
+            el.className = 'toast-anim glass-panel pixel-card rounded-2xl px-4 py-2 text-xs sm:text-sm font-extrabold text-[#222532] whitespace-nowrap';
+            el.textContent = msg;
+            container.innerHTML = '';
+            container.appendChild(el);
+          }
+
+          function setBubble(text, duration = 3.6) {
+            appState.bubbleText = text;
+            appState.bubbleTimer = duration;
+            speechBubbleEl.textContent = text || '';
+            speechBubbleEl.classList.toggle('hidden', !text);
+          }
+
+          function syncCameraSliders(force = false) {
+            const zStr = appState.distance.toFixed(1);
+            if (force || zStr !== appState.lastSliderZoom) {
+              appState.lastSliderZoom = zStr;
+              sliderZoomEl.value = zStr;
+              zoomValLabelEl.textContent = zStr;
+            }
+            const pStr = `${Math.round(appState.pitchDeg)}°`;
+            if (force || pStr !== appState.lastSliderPitch) {
+              appState.lastSliderPitch = pStr;
+              sliderPitchEl.value = String(Math.round(appState.pitchDeg));
+              pitchValLabelEl.textContent = pStr;
+            }
+          }
+
+          function syncVirtualPadVisibility() {
+            const shouldShow = (appState.mode === 'world') && appState.showVirtualPad;
+            virtualPadEl.classList.toggle('hidden', !shouldShow);
+            chkVirtualPadEl.checked = appState.showVirtualPad;
+            mobileEmoteBarEl.classList.toggle('studio-bottom', !shouldShow);
+          }
+
+          function updateHudTag() {
+            const count = 1 + crowd.length;
+            const tris = player.getTriangleCount();
+            const styleIcon = appState.styleMode === 'lowpoly' ? '💎DS' : (appState.styleMode === 'ps1' ? '🎮PS1' : '🫧Smooth');
+            document.getElementById('hudResTag').textContent =
+              appState.mode === 'world' ? `${styleIcon} · ${tris}t · ${count}体` : `${styleIcon} · ${tris}t`;
+            document.getElementById('polyCountBadge').textContent = `${tris.toLocaleString()} tris`;
+            document.getElementById('crowdCountBadge').textContent = `${count}体`;
+            document.getElementById('topCountTag').textContent = String(count);
+          }
+
+          function setModelStyle(styleMode, notify = true) {
+            appState.styleMode = styleMode;
+            const isSmooth = (styleMode === 'smooth');
+            const isPS1 = (styleMode === 'ps1');
+
+            player.setStyle(styleMode);
+            crowd.forEach((npc) => npc.setStyle(styleMode));
+
+            if (isSmooth) {
+              appState.flatShading = false;
+              globalRenderUniforms.uFlatMix.value = 0.0;
+              globalRenderUniforms.uSnapRes.value = 0.0;
+            } else if (isPS1) {
+              appState.flatShading = true;
+              globalRenderUniforms.uFlatMix.value = 1.0;
+              globalRenderUniforms.uSnapRes.value = 96.0;
+            } else {
+              appState.flatShading = true;
+              globalRenderUniforms.uFlatMix.value = 1.0;
+              globalRenderUniforms.uSnapRes.value = 0.0;
+            }
+            document.getElementById('chkFlatShade').checked = appState.flatShading;
+
+            document.querySelectorAll('.style-btn').forEach((btn) => {
+              const act = btn.dataset.style === styleMode;
+              btn.classList.toggle('active', act);
+              btn.classList.toggle('bg-white', !act);
+            });
+
+            updateHudTag();
+            if (notify) {
+              const label = styleMode === 'lowpoly'
+                ? `💎 DS風ローポリ (${player.getTriangleCount()} tris)`
+                : (styleMode === 'ps1'
+                  ? `🎮 PS1レトロ＋頂点スナップ (${player.getTriangleCount()} tris)`
+                  : `🫧 なめらか3D (${player.getTriangleCount().toLocaleString()} tris)`);
+              showToast(label);
+            }
+          }
+
+          function openDrawer() {
+            if (isCompactViewport()) {
+              settingsDrawerEl.classList.add('open');
+              drawerBackdropEl.classList.add('open');
+            } else {
+              settingsDrawerEl.classList.toggle('desktop-hidden');
+              setTimeout(rebuildRenderTargets, 25);
+            }
+          }
+
+          function closeDrawer() {
+            if (isCompactViewport()) {
+              settingsDrawerEl.classList.remove('open');
+              drawerBackdropEl.classList.remove('open');
+            } else {
+              settingsDrawerEl.classList.add('desktop-hidden');
+              setTimeout(rebuildRenderTargets, 25);
+            }
+          }
+
+          function triggerEmote(emoteId) {
+            const em = EMOTE_BY_ID[emoteId];
+            if (!em) return;
+            player.setEmote(em.id);
+            setBubble(em.bubble, 4.2);
+            playSfx('emote');
+            updateEmoteUI();
+            updateHudTag();
+          }
+
+          function setQuadMode(enabled, notify = true) {
+            player.quadMode = enabled;
+            document.getElementById('btnStyleBiped').classList.toggle('active', !enabled);
+            document.getElementById('btnStyleBiped').classList.toggle('bg-white', enabled);
+            document.getElementById('btnStyleQuad').classList.toggle('active', enabled);
+            document.getElementById('btnStyleQuad').classList.toggle('bg-white', !enabled);
+
+            const padQuadBtn = document.getElementById('btnPadQuad');
+            padQuadBtn.classList.toggle('active-quad', enabled);
+            document.getElementById('padQuadIcon').textContent = enabled ? '🐕' : '🚶';
+            document.getElementById('padQuadText').textContent = enabled ? '4足' : '2足';
+
+            playSfx('emote');
+            updateHudTag();
+            if (notify) showToast(enabled ? '🐕 4足マルチーズモード！' : '🚶 2足立ちモード！');
+          }
+
+          function triggerJump() {
+            if (appState.mode !== 'world') return;
+            if (player.onGround) {
+              player.vel.y = 7.8;
+              player.onGround = false;
+              playSfx('jump');
+            }
+          }
+
+          function spawnCrowd(num = 5) {
+            const funEmotes = ['normal', 'happy', 'hug', 'du', 'fierce', 'angel', 'devil', 'rose'];
+            for (let i = 0; i < num; i++) {
+              const npc = new GanadiCharacter(assets, worldScene, charScene, false, appState.styleMode);
+              const ang = Math.random() * Math.PI * 2;
+              const dist = 2.0 + Math.random() * 5.2;
+              npc.pos.set(
+                clamp(player.pos.x + Math.cos(ang) * dist, -WORLD_HALF + 1.5, WORLD_HALF - 1.5),
+                0.5 + Math.random() * 0.9,
+                clamp(player.pos.z + Math.sin(ang) * dist, -WORLD_HALF + 1.5, WORLD_HALF - 1.5)
+              );
+              npc.onGround = false;
+              npc.yaw = Math.random() * Math.PI * 2;
+              npc.quadMode = Math.random() < 0.35;
+              npc.quadBlend = npc.quadMode ? 1 : 0;
+              npc.setEmote(funEmotes[Math.floor(Math.random() * funEmotes.length)]);
+              npc.aiMode = Math.random() < 0.58 ? 'chaseBall' : 'wander';
+              npc.setVisible(appState.mode === 'world');
+              crowd.push(npc);
+            }
+            playSfx('spawn');
+            updateHudTag();
+            showToast(`✨ ガナディが +${num}体 増殖！(合計 ${1 + crowd.length}体)`);
+          }
+
+          function clearCrowd() {
+            if (crowd.length === 0) return;
+            crowd.forEach((npc) => npc.dispose(worldScene, charScene));
+            crowd.length = 0;
+            updateHudTag();
+            showToast('🧹 増殖ガナディをクリアしました');
+          }
+
+          // ---- CLEAN SELF-CONTAINED index.html BUILDER (FOR NETLIFY DROP / TIINY HOST) ----
+          function buildCleanIndexHtml() {
+            const clone = document.documentElement.cloneNode(true);
+            // Strip runtime-injected styles (Tailwind CDN regenerates them cleanly on load)
+            clone.querySelectorAll('head style').forEach((st) => {
+              if (st.id !== 'ganadiCoreStyle') st.remove();
+            });
+            // Clear dynamically populated DOM containers so initApp() builds them fresh
+            const clearIds = ['emoteGrid', 'mobileEmoteStrip', 'toastContainer'];
+            clearIds.forEach((id) => {
+              const el = clone.querySelector('#' + id);
+              if (el) el.innerHTML = '';
+            });
+            const sb = clone.querySelector('#speechBubble');
+            if (sb) {
+              sb.textContent = '';
+              sb.classList.add('hidden');
+              sb.removeAttribute('style');
+            }
+            const eb = clone.querySelector('#errorBanner');
+            if (eb) eb.classList.add('hidden');
+            const dr = clone.querySelector('#settingsDrawer');
+            if (dr) dr.classList.remove('open', 'desktop-hidden');
+            const bd = clone.querySelector('#drawerBackdrop');
+            if (bd) bd.classList.remove('open');
+            const cvs = clone.querySelector('#webglCanvas');
+            if (cvs) {
+              cvs.removeAttribute('width');
+              cvs.removeAttribute('height');
+              cvs.removeAttribute('style');
+            }
+            const jb = clone.querySelector('#joyBase');
+            if (jb) jb.classList.remove('auto-dash');
+            const jk = clone.querySelector('#joyKnob');
+            if (jk) jk.removeAttribute('style');
+            return '<!DOCTYPE html>\n' + clone.outerHTML;
+          }
+
+          document.getElementById('btnSaveIndexHtml').addEventListener('click', () => {
+            try {
+              const htmlText = buildCleanIndexHtml();
+              const blob = new Blob([htmlText], { type: 'text/html;charset=utf-8' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.download = 'index.html';
+              a.href = url;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              setTimeout(() => URL.revokeObjectURL(url), 2000);
+              playSfx('spawn');
+              showToast('💾 index.html を保存しました！NetlifyかTiinyへアップしてね');
+            } catch (err) {
+              showToast('⚠️ 保存に失敗しました。「HTMLコピー」をお試しください');
+            }
+          });
+
+          document.getElementById('btnCopyHtml').addEventListener('click', async () => {
+            const htmlText = buildCleanIndexHtml();
+            let ok = false;
+            try {
+              if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText(htmlText);
+                ok = true;
+              }
+            } catch (_) {}
+            if (!ok) {
+              try {
+                const ta = document.createElement('textarea');
+                ta.value = htmlText;
+                ta.style.position = 'fixed';
+                ta.style.opacity = '0';
+                document.body.appendChild(ta);
+                ta.focus();
+                ta.select();
+                ok = document.execCommand('copy');
+                document.body.removeChild(ta);
+              } catch (_) {}
+            }
+            if (ok) {
+              playSfx('emote');
+              showToast('📋 HTMLコードをコピーしました！(Tiiny Host等に貼り付けOK)');
+            } else {
+              showToast('⚠️ コピーできませんでした。「index.html保存」をお試しください');
+            }
+          });
+
+          // Build BOTH Desktop/Drawer Emote Grid & Mobile Horizontal Emote Pill Strip
+          const emoteGrid = document.getElementById('emoteGrid');
+          const mobileEmoteStrip = document.getElementById('mobileEmoteStrip');
+          emoteGrid.innerHTML = '';
+          mobileEmoteStrip.innerHTML = '';
+
+          EMOTES.forEach((em) => {
+            const btn = document.createElement('button');
+            btn.dataset.emote = em.id;
+            btn.className = 'emote-btn pixel-btn bg-white hover:bg-pink-50 rounded-xl px-2 py-1.5 text-[11px] font-extrabold flex items-center justify-between gap-1 text-left';
+            const keyHtml = em.key ? `<span class="mono text-[9px] opacity-55">[${em.key}]</span>` : '';
+            btn.innerHTML = `<span class="truncate flex items-center gap-1"><span>${em.icon}</span><span class="truncate">${em.label}</span></span>${keyHtml}`;
+            btn.addEventListener('click', () => triggerEmote(em.id));
+            emoteGrid.appendChild(btn);
+
+            const pill = document.createElement('button');
+            pill.dataset.emote = em.id;
+            pill.className = 'emote-pill';
+            pill.innerHTML = `<span>${em.icon}</span><span>${em.label}</span>`;
+            pill.addEventListener('click', (e) => {
+              e.stopPropagation();
+              triggerEmote(em.id);
+            });
+            mobileEmoteStrip.appendChild(pill);
+          });
+
+          function updateEmoteUI() {
+            document.querySelectorAll('.emote-btn').forEach((btn) => {
+              const act = btn.dataset.emote === player.activeEmote;
+              btn.classList.toggle('active', act);
+              btn.classList.toggle('bg-white', !act);
+            });
+            document.querySelectorAll('.emote-pill').forEach((pill) => {
+              pill.classList.toggle('active', pill.dataset.emote === player.activeEmote);
+            });
+          }
+          updateEmoteUI();
+
+          function switchMode(mode) {
+            appState.mode = mode;
+            const isWorld = mode === 'world';
+            worldMeadowGroup.visible = isWorld;
+            worldPropsGroup.visible = isWorld;
+            studioPedestalGroup.visible = !isWorld;
+            crowd.forEach((npc) => npc.setVisible(isWorld));
+
+            const isPortrait = viewW < viewH;
+            if (!isWorld) {
+              skyUniforms.uTop.value.set('#ddebfa');
+              skyUniforms.uBottom.value.set('#f6f9fe');
+              player.pos.set(0, 0, 0);
+              player.vel.set(0, 0, 0);
+              player.yaw = 0;
+              player.onGround = true;
+              appState.distance = isPortrait ? 7.6 : 6.2;
+              appState.pitchDeg = 16;
+              appState.yawDeg = 35;
+              appState.joy.x = 0; appState.joy.y = 0; appState.joy.mag = 0; appState.joy.autoDash = false;
+            } else {
+              skyUniforms.uTop.value.set('#9cd7ff');
+              skyUniforms.uBottom.value.set('#e8f7ff');
+              appState.distance = isPortrait ? 11.2 : 10.0;
+              appState.pitchDeg = 22;
+            }
+
+            document.getElementById('btnQuickSpawn').classList.toggle('hidden', !isWorld);
+            document.getElementById('crowdPanel').classList.toggle('hidden', !isWorld);
+            document.getElementById('worldKeyHints').classList.toggle('hidden', !isWorld);
+            document.getElementById('studioHintText').classList.toggle('hidden', isWorld);
+
+            const bW = document.getElementById('btnModeWorld');
+            const bS = document.getElementById('btnModeStudio');
+            bW.className = `px-2.5 sm:px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-extrabold transition-colors ${isWorld ? 'bg-[#222532] text-white' : 'text-[#222532] hover:bg-slate-200/70'}`;
+            bS.className = `px-2.5 sm:px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-extrabold transition-colors ${!isWorld ? 'bg-[#222532] text-white' : 'text-[#222532] hover:bg-slate-200/70'}`;
+
+            syncVirtualPadVisibility();
+            syncCameraSliders(true);
+            updateHudTag();
+          }
+
+          // Top HUD & Drawer Wiring
+          document.getElementById('btnModeWorld').addEventListener('click', () => switchMode('world'));
+          document.getElementById('btnModeStudio').addEventListener('click', () => switchMode('studio'));
+          document.getElementById('btnOpenSettings').addEventListener('click', openDrawer);
+          document.getElementById('btnCloseDrawer').addEventListener('click', closeDrawer);
+          drawerBackdropEl.addEventListener('click', closeDrawer);
+
+          document.querySelectorAll('.style-btn').forEach((btn) => {
+            btn.addEventListener('click', () => {
+              playSfx('emote');
+              setModelStyle(btn.dataset.style, true);
+            });
+          });
+          document.getElementById('chkFlatShade').addEventListener('change', (e) => {
+            appState.flatShading = e.target.checked;
+            globalRenderUniforms.uFlatMix.value = appState.flatShading ? 1.0 : 0.0;
+          });
+          document.getElementById('chkWireframe').addEventListener('change', (e) => {
+            appState.wireframeOn = e.target.checked;
+            player.setWireframe(appState.wireframeOn);
+          });
+
+          document.getElementById('btnQuickSpawn').addEventListener('click', () => spawnCrowd(5));
+          document.getElementById('btnSpawn5').addEventListener('click', () => spawnCrowd(5));
+          document.getElementById('btnClearCrowd').addEventListener('click', clearCrowd);
+          document.getElementById('btnStyleBiped').addEventListener('click', () => setQuadMode(false));
+          document.getElementById('btnStyleQuad').addEventListener('click', () => setQuadMode(true));
+
+          function toggleSound() {
+            soundEnabled = !soundEnabled;
+            const icon = soundEnabled ? '🔊' : '🔇';
+            document.getElementById('btnSound').textContent = icon;
+            document.getElementById('btnSoundDrawer').textContent = icon;
+            showToast(soundEnabled ? '🔊 効果音 ON' : '🔇 効果音 OFF');
+          }
+          document.getElementById('btnSound').addEventListener('click', toggleSound);
+          document.getElementById('btnSoundDrawer').addEventListener('click', toggleSound);
+
+          document.getElementById('btnReset').addEventListener('click', () => {
+            const isPortrait = viewW < viewH;
+            appState.yawDeg = 35;
+            appState.pitchDeg = appState.mode === 'world' ? 22 : 16;
+            appState.distance = appState.mode === 'world' ? (isPortrait ? 11.2 : 10.0) : (isPortrait ? 7.6 : 6.2);
+            appState.targetYawDeg = null;
+            appState.targetPitchDeg = null;
+            player.pos.set(0, 0, appState.mode === 'world' ? 0.6 : 0);
+            player.vel.set(0, 0, 0);
+            player.yaw = 0;
+            ballState.pos.set(2.8, ballState.radius, 2.0);
+            ballState.vel.set(0, 0, 0);
+            syncCameraSliders(true);
+            showToast('↺ カメラと配置をリセットしました');
+          });
+
+          sliderZoomEl.addEventListener('input', (e) => {
+            appState.distance = clamp(parseFloat(e.target.value), 4.0, 21.0);
+            syncCameraSliders(true);
+          });
+          sliderPitchEl.addEventListener('input', (e) => {
+            appState.targetPitchDeg = null;
+            appState.pitchDeg = clamp(parseFloat(e.target.value), 6, 68);
+            syncCameraSliders(true);
+          });
+
+          document.querySelectorAll('.px-btn').forEach((btn) => {
+            btn.addEventListener('click', () => {
+              pixelScale = parseInt(btn.dataset.px, 10);
+              document.getElementById('pixelSizeLabel').textContent = `${pixelScale}x`;
+              document.querySelectorAll('.px-btn').forEach((b) => {
+                const act = b === btn;
+                b.classList.toggle('active', act);
+                b.classList.toggle('bg-white', !act);
+              });
+              rebuildRenderTargets();
+              updateHudTag();
+            });
+          });
+
+          document.getElementById('chkOutline').addEventListener('change', (e) => {
+            appState.outlineOn = e.target.checked;
+            compositeMat.uniforms.uOutlineOn.value = appState.outlineOn ? 1.0 : 0.0;
+          });
+          document.getElementById('chkAutoRot').addEventListener('change', (e) => {
+            appState.autoRotate = e.target.checked;
+          });
+          chkVirtualPadEl.addEventListener('change', (e) => {
+            appState.showVirtualPad = e.target.checked;
+            syncVirtualPadVisibility();
+          });
+
+          document.querySelectorAll('.preset-btn').forEach((btn) => {
+            btn.addEventListener('click', () => {
+              appState.autoRotate = false;
+              document.getElementById('chkAutoRot').checked = false;
+              appState.targetYawDeg = parseFloat(btn.dataset.yaw);
+              appState.targetPitchDeg = parseFloat(btn.dataset.pitch);
+            });
+          });
+
+          // True Transparent Outlined Sprite PNG Export
+          document.getElementById('btnExportPng').addEventListener('click', () => {
+            const prevPropsVis = worldPropsGroup.visible;
+            const prevCrowdVis = crowd.map((c) => c.root.visible);
+            if (appState.mode === 'world') {
+              worldPropsGroup.visible = false;
+              crowd.forEach((c) => { c.root.visible = false; });
+            }
+
+            renderer.setRenderTarget(charRT);
+            renderer.setClearColor(0x000000, 0);
+            renderer.clear();
+            renderer.render(charScene, camera);
+
+            const raw = new Uint8Array(lowW * lowH * 4);
+            renderer.readRenderTargetPixels(charRT, 0, 0, lowW, lowH, raw);
+
+            worldPropsGroup.visible = prevPropsVis;
+            crowd.forEach((c, idx) => { c.root.visible = prevCrowdVis[idx]; });
+            renderPipeline();
+
+            const out = new Uint8ClampedArray(lowW * lowH * 4);
+            let minX = lowW, minY = lowH, maxX = -1, maxY = -1;
+
+            const isOpaque = (x, y) => {
+              if (x < 0 || x >= lowW || y < 0 || y >= lowH) return false;
+              const wy = lowH - 1 - y;
+              return raw[(wy * lowW + x) * 4 + 3] > 128;
+            };
+
+            for (let y = 0; y < lowH; y++) {
+              const wy = lowH - 1 - y;
+              for (let x = 0; x < lowW; x++) {
+                const srcIdx = (wy * lowW + x) * 4;
+                const dstIdx = (y * lowW + x) * 4;
+                if (raw[srcIdx + 3] > 128) {
+                  out[dstIdx]     = raw[srcIdx];
+                  out[dstIdx + 1] = raw[srcIdx + 1];
+                  out[dstIdx + 2] = raw[srcIdx + 2];
+                  out[dstIdx + 3] = 255;
+                  if (x < minX) minX = x;
+                  if (x > maxX) maxX = x;
+                  if (y < minY) minY = y;
+                  if (y > maxY) maxY = y;
+                } else if (
+                  appState.outlineOn &&
+                  (isOpaque(x - 1, y) || isOpaque(x + 1, y) || isOpaque(x, y - 1) || isOpaque(x, y + 1))
+                ) {
+                  out[dstIdx]     = 34;
+                  out[dstIdx + 1] = 37;
+                  out[dstIdx + 2] = 50;
+                  out[dstIdx + 3] = 255;
+                  if (x < minX) minX = x;
+                  if (x > maxX) maxX = x;
+                  if (y < minY) minY = y;
+                  if (y > maxY) maxY = y;
+                }
+              }
+            }
+
+            if (maxX < minX || maxY < minY) {
+              showToast('⚠️ キャラクターが画面内に見つかりませんでした');
+              return;
+            }
+
+            const pad = 6;
+            const cX = Math.max(0, minX - pad);
+            const cY = Math.max(0, minY - pad);
+            const cW = Math.min(lowW - cX, (maxX - minX + 1) + pad * 2);
+            const cH = Math.min(lowH - cY, (maxY - minY + 1) + pad * 2);
+
+            const srcCanvas = document.createElement('canvas');
+            srcCanvas.width = lowW;
+            srcCanvas.height = lowH;
+            srcCanvas.getContext('2d').putImageData(new ImageData(out, lowW, lowH), 0, 0);
+
+            const exportScale = 4;
+            const expCanvas = document.createElement('canvas');
+            expCanvas.width = cW * exportScale;
+            expCanvas.height = cH * exportScale;
+            const ectx = expCanvas.getContext('2d');
+            ectx.imageSmoothingEnabled = false;
+            ectx.drawImage(srcCanvas, cX, cY, cW, cH, 0, 0, expCanvas.width, expCanvas.height);
+
+            const yawTag = Math.round(appState.yawDeg);
+            const filename = `ganadi_${player.activeEmote}_${yawTag}deg_transparent.png`;
+            const link = document.createElement('a');
+            link.download = filename;
+            link.href = expCanvas.toDataURL('image/png');
+            link.click();
+            showToast(`📷 透過PNG保存しました (${filename})`);
+          });
+
+          // ===================================================================
+          // 10A. SPEC-COMPLIANT PURE-JS .GLB (glTF 2.0 BINARY) EXPORTER
+          // ===================================================================
+          function exportGanadiGLB() {
+            player.root.updateMatrixWorld(true);
+            const invRoot = new THREE.Matrix4().copy(player.root.matrixWorld).invert();
+
+            const partMeshes = [];
+            const collect = (obj) => {
+              if (!obj.visible) return;
+              if (obj.isMesh && !obj.userData.isWireframe && obj.geometry) {
+                partMeshes.push(obj);
+              }
+              for (let i = 0; i < obj.children.length; i++) collect(obj.children[i]);
+            };
+            collect(player.root);
+
+            if (partMeshes.length === 0) {
+              showToast('⚠️ 書き出し対象のメッシュが見つかりませんでした');
+              return;
+            }
+
+            const binChunks = [];
+            let binByteLen = 0;
+            const bufferViews = [];
+            const accessors = [];
+            const materials = [];
+            const meshesJson = [];
+            const nodesJson = [];
+            const imagesJson = [];
+            const texturesJson = [];
+            const samplersJson = [];
+
+            const pushBin = (typedArray, target) => {
+              const bytes = new Uint8Array(typedArray.buffer, typedArray.byteOffset, typedArray.byteLength);
+              const pad = (4 - (binByteLen % 4)) % 4;
+              if (pad > 0) {
+                binChunks.push(new Uint8Array(pad));
+                binByteLen += pad;
+              }
+              const offset = binByteLen;
+              binChunks.push(bytes);
+              binByteLen += bytes.byteLength;
+              const bv = { buffer: 0, byteOffset: offset, byteLength: bytes.byteLength };
+              if (target) bv.target = target;
+              bufferViews.push(bv);
+              return bufferViews.length - 1;
+            };
+
+            const matIndexMap = new Map();
+            const getOrCreateGltfMat = (threeMat) => {
+              if (threeMat.userData && threeMat.userData.faceCanvas) {
+                const key = 'face_' + threeMat.userData.faceId;
+                if (matIndexMap.has(key)) return matIndexMap.get(key);
+
+                const dataUrl = threeMat.userData.faceCanvas.toDataURL('image/png');
+                const b64 = dataUrl.split(',')[1];
+                const rawStr = atob(b64);
+                const pngBytes = new Uint8Array(rawStr.length);
+                for (let i = 0; i < rawStr.length; i++) pngBytes[i] = rawStr.charCodeAt(i);
+                const imgBv = pushBin(pngBytes, null);
+
+                const imgIdx = imagesJson.length;
+                imagesJson.push({ bufferView: imgBv, mimeType: 'image/png' });
+                if (samplersJson.length === 0) {
+                  samplersJson.push({ magFilter: 9728, minFilter: 9728, wrapS: 33071, wrapT: 33071 });
+                }
+                const texIdx = texturesJson.length;
+                texturesJson.push({ sampler: 0, source: imgIdx });
+
+                const mIdx = materials.length;
+                materials.push({
+                  name: 'GanadiFace_' + threeMat.userData.faceId,
+                  pbrMetallicRoughness: {
+                    baseColorTexture: { index: texIdx },
+                    metallicFactor: 0.0,
+                    roughnessFactor: 1.0,
+                  },
+                  alphaMode: 'MASK',
+                  alphaCutoff: 0.5,
+                  doubleSided: false,
+                });
+                matIndexMap.set(key, mIdx);
+                return mIdx;
+              }
+
+              const hex = (threeMat.userData && threeMat.userData.baseHex) || '#FFFFFF';
+              if (matIndexMap.has(hex)) return matIndexMap.get(hex);
+              const col = new THREE.Color(hex);
+              const mIdx = materials.length;
+              materials.push({
+                name: 'Mat_' + hex.replace('#', ''),
+                pbrMetallicRoughness: {
+                  baseColorFactor: [
+                    Math.pow(col.r, 2.2),
+                    Math.pow(col.g, 2.2),
+                    Math.pow(col.b, 2.2),
+                    1.0,
+                  ],
+                  metallicFactor: 0.0,
+                  roughnessFactor: 0.92,
+                },
+              });
+              matIndexMap.set(hex, mIdx);
+              return mIdx;
+            };
+
+            const relMat = new THREE.Matrix4();
+            const normMat = new THREE.Matrix3();
+            const vPos = new THREE.Vector3();
+            const vNrm = new THREE.Vector3();
+
+            partMeshes.forEach((mesh, pIdx) => {
+              relMat.multiplyMatrices(invRoot, mesh.matrixWorld);
+              normMat.getNormalMatrix(relMat);
+
+              const srcGeo = mesh.geometry;
+              const geo = srcGeo.index ? srcGeo.toNonIndexed() : srcGeo;
+              const posAttr = geo.attributes.position;
+              const nrmAttr = (appState.flatShading && geo.attributes.aFlatNormal)
+                ? geo.attributes.aFlatNormal
+                : geo.attributes.normal;
+              const uvAttr = geo.attributes.uv;
+              const count = posAttr.count;
+
+              const outPos = new Float32Array(count * 3);
+              const outNrm = new Float32Array(count * 3);
+              const outUv  = new Float32Array(count * 2);
+
+              let minX = Infinity, minY = Infinity, minZ = Infinity;
+              let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+
+              for (let i = 0; i < count; i++) {
+                vPos.fromBufferAttribute(posAttr, i).applyMatrix4(relMat);
+                outPos[i * 3]     = vPos.x;
+                outPos[i * 3 + 1] = vPos.y;
+                outPos[i * 3 + 2] = vPos.z;
+                if (vPos.x < minX) minX = vPos.x;
+                if (vPos.y < minY) minY = vPos.y;
+                if (vPos.z < minZ) minZ = vPos.z;
+                if (vPos.x > maxX) maxX = vPos.x;
+                if (vPos.y > maxY) maxY = vPos.y;
+                if (vPos.z > maxZ) maxZ = vPos.z;
+
+                if (nrmAttr) {
+                  vNrm.fromBufferAttribute(nrmAttr, i).applyMatrix3(normMat).normalize();
+                  outNrm[i * 3]     = vNrm.x;
+                  outNrm[i * 3 + 1] = vNrm.y;
+                  outNrm[i * 3 + 2] = vNrm.z;
+                } else {
+                  outNrm[i * 3 + 1] = 1.0;
+                }
+
+                if (uvAttr) {
+                  outUv[i * 2]     = uvAttr.getX(i);
+                  outUv[i * 2 + 1] = 1.0 - uvAttr.getY(i);
+                }
+              }
+
+              const posBv = pushBin(outPos, 34962);
+              const nrmBv = pushBin(outNrm, 34962);
+              const uvBv  = pushBin(outUv,  34962);
+
+              const posAcc = accessors.length;
+              accessors.push({
+                bufferView: posBv, componentType: 5126, count: count, type: 'VEC3',
+                min: [minX, minY, minZ], max: [maxX, maxY, maxZ],
+              });
+              const nrmAcc = accessors.length;
+              accessors.push({ bufferView: nrmBv, componentType: 5126, count: count, type: 'VEC3' });
+              const uvAcc = accessors.length;
+              accessors.push({ bufferView: uvBv, componentType: 5126, count: count, type: 'VEC2' });
+
+              const matIdx = getOrCreateGltfMat(mesh.material);
+              const meshIdx = meshesJson.length;
+              meshesJson.push({
+                name: mesh.name || `Part_${pIdx}`,
+                primitives: [{
+                  attributes: { POSITION: posAcc, NORMAL: nrmAcc, TEXCOORD_0: uvAcc },
+                  material: matIdx,
+                }],
+              });
+              nodesJson.push({ name: mesh.name || `Part_${pIdx}`, mesh: meshIdx });
+
+              if (geo !== srcGeo) geo.dispose();
+            });
+
+            const binPad = (4 - (binByteLen % 4)) % 4;
+            if (binPad > 0) {
+              binChunks.push(new Uint8Array(binPad));
+              binByteLen += binPad;
+            }
+
+            const gltf = {
+              asset: { version: '2.0', generator: 'Ganadi 3D Low-Poly Studio' },
+              scene: 0,
+              scenes: [{ name: 'Ganadi', nodes: nodesJson.map((_, idx) => idx) }],
+              nodes: nodesJson,
+              meshes: meshesJson,
+              materials: materials,
+              accessors: accessors,
+              bufferViews: bufferViews,
+              buffers: [{ byteLength: binByteLen }],
+            };
+            if (imagesJson.length > 0) {
+              gltf.images = imagesJson;
+              gltf.textures = texturesJson;
+              gltf.samplers = samplersJson;
+            }
+
+            const jsonStr = JSON.stringify(gltf);
+            const enc = new TextEncoder();
+            const jsonRaw = enc.encode(jsonStr);
+            const jsonPad = (4 - (jsonRaw.byteLength % 4)) % 4;
+            const jsonLen = jsonRaw.byteLength + jsonPad;
+
+            const totalLen = 12 + 8 + jsonLen + 8 + binByteLen;
+            const outBuf = new ArrayBuffer(totalLen);
+            const dv = new DataView(outBuf);
+            const outU8 = new Uint8Array(outBuf);
+
+            dv.setUint32(0, 0x46546C67, true);
+            dv.setUint32(4, 2, true);
+            dv.setUint32(8, totalLen, true);
+
+            dv.setUint32(12, jsonLen, true);
+            dv.setUint32(16, 0x4E4F534A, true);
+            outU8.set(jsonRaw, 20);
+            for (let i = 0; i < jsonPad; i++) outU8[20 + jsonRaw.byteLength + i] = 0x20;
+
+            const binHeaderOff = 20 + jsonLen;
+            dv.setUint32(binHeaderOff, binByteLen, true);
+            dv.setUint32(binHeaderOff + 4, 0x004E4942, true);
+            let cursor = binHeaderOff + 8;
+            for (let i = 0; i < binChunks.length; i++) {
+              outU8.set(binChunks[i], cursor);
+              cursor += binChunks[i].byteLength;
+            }
+
+            const blob = new Blob([outBuf], { type: 'model/gltf-binary' });
+            const url = URL.createObjectURL(blob);
+            const styleTag = appState.styleMode === 'smooth' ? 'smooth' : 'lowpoly';
+            const fname = `ganadi_${styleTag}_${player.activeEmote}.glb`;
+            const a = document.createElement('a');
+            a.download = fname;
+            a.href = url;
+            a.click();
+            setTimeout(() => URL.revokeObjectURL(url), 1500);
+            showToast(`📦 .GLB書き出し完了 (${fname} · ${player.getTriangleCount()} tris)`);
+          }
+
+          document.getElementById('btnExportGlb').addEventListener('click', exportGanadiGLB);
+
+          // ===================================================================
+          // 10B. TRUE MULTI-TOUCH ANALOG JOYSTICK & TACTILE ACTION BUTTONS
+          // ===================================================================
+          const joyZoneEl = document.getElementById('joyZone');
+          const joyBaseEl = document.getElementById('joyBase');
+          const joyKnobEl = document.getElementById('joyKnob');
+
+          function updateJoystickFromClient(clientX, clientY) {
+            const rect = joyBaseEl.getBoundingClientRect();
+            const cx = rect.left + rect.width * 0.5;
+            const cy = rect.top + rect.height * 0.5;
+            const maxR = Math.max(24, rect.width * 0.42);
+            let dx = clientX - cx;
+            let dy = clientY - cy;
+            const dist = Math.hypot(dx, dy);
+            const clamped = Math.min(dist, maxR);
+            if (dist > 0.001) {
+              dx = (dx / dist) * clamped;
+              dy = (dy / dist) * clamped;
+            }
+            const nx = dx / maxR;
+            const ny = dy / maxR;
+            const mag = Math.min(1, dist / maxR);
+
+            appState.joy.x = nx;
+            appState.joy.y = ny;
+            appState.joy.mag = mag;
+            appState.joy.autoDash = mag >= 0.78;
+
+            joyKnobEl.style.transform = `translate3d(${dx.toFixed(1)}px, ${dy.toFixed(1)}px, 0)`;
+            joyBaseEl.classList.toggle('auto-dash', appState.joy.autoDash);
+          }
+
+          function resetJoystick() {
+            appState.joy.pointerId = null;
+            appState.joy.x = 0;
+            appState.joy.y = 0;
+            appState.joy.mag = 0;
+            appState.joy.autoDash = false;
+            joyKnobEl.style.transform = 'translate3d(0px, 0px, 0)';
+            joyBaseEl.classList.remove('auto-dash');
+          }
+
+          joyZoneEl.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (appState.joy.pointerId !== null) return;
+            appState.joy.pointerId = e.pointerId;
+            try { joyZoneEl.setPointerCapture(e.pointerId); } catch (_) {}
+            updateJoystickFromClient(e.clientX, e.clientY);
+          });
+          joyZoneEl.addEventListener('pointermove', (e) => {
+            if (e.pointerId !== appState.joy.pointerId) return;
+            e.preventDefault();
+            e.stopPropagation();
+            updateJoystickFromClient(e.clientX, e.clientY);
+          });
+          const endJoy = (e) => {
+            if (e.pointerId !== appState.joy.pointerId) return;
+            e.stopPropagation();
+            resetJoystick();
+          };
+          joyZoneEl.addEventListener('pointerup', endJoy);
+          joyZoneEl.addEventListener('pointercancel', endJoy);
+
+          const btnPadJump = document.getElementById('btnPadJump');
+          btnPadJump.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            btnPadJump.classList.add('pressed');
+            triggerJump();
+          });
+          const releaseJumpBtn = () => btnPadJump.classList.remove('pressed');
+          btnPadJump.addEventListener('pointerup', releaseJumpBtn);
+          btnPadJump.addEventListener('pointercancel', releaseJumpBtn);
+          btnPadJump.addEventListener('pointerleave', releaseJumpBtn);
+
+          const btnPadQuad = document.getElementById('btnPadQuad');
+          btnPadQuad.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            btnPadQuad.classList.add('pressed');
+            setQuadMode(!player.quadMode);
+          });
+          const releaseQuadBtn = () => btnPadQuad.classList.remove('pressed');
+          btnPadQuad.addEventListener('pointerup', releaseQuadBtn);
+          btnPadQuad.addEventListener('pointercancel', releaseQuadBtn);
+          btnPadQuad.addEventListener('pointerleave', releaseQuadBtn);
+
+          const btnPadDash = document.getElementById('btnPadDash');
+          btnPadDash.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            appState.dashLock = !appState.dashLock;
+            btnPadDash.classList.toggle('active-dash', appState.dashLock);
+            playSfx('emote');
+            showToast(appState.dashLock ? '💨 ダッシュON' : '🚶 通常スピード');
+          });
+
+          const keyToEmote = {};
+          EMOTES.forEach((e) => { if (e.key) keyToEmote[e.key] = e.id; });
+          window.addEventListener('keydown', (e) => {
+            if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+            appState.keys[e.code] = true;
+            if (e.code === 'KeyQ') { setQuadMode(!player.quadMode); return; }
+            if (e.code === 'Space' && appState.mode === 'world') { e.preventDefault(); triggerJump(); return; }
+            if (keyToEmote[e.key]) triggerEmote(keyToEmote[e.key]);
+          });
+          window.addEventListener('keyup', (e) => { appState.keys[e.code] = false; });
+
+          // ===================================================================
+          // 10C. MULTI-TOUCH CANVAS CAMERA (1-FINGER ORBIT + 2-FINGER PINCH ZOOM)
+          // ===================================================================
+          function getTwoPointerDist() {
+            const pts = Array.from(appState.canvasPointers.values());
+            if (pts.length < 2) return 0;
+            return Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
+          }
+
+          canvas.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            appState.canvasPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+            try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+            if (appState.canvasPointers.size === 2) {
+              appState.pinchStartDist = getTwoPointerDist();
+              appState.pinchStartZoom = appState.distance;
+            }
+          });
+
+          canvas.addEventListener('pointermove', (e) => {
+            const prev = appState.canvasPointers.get(e.pointerId);
+            if (!prev) return;
+            e.preventDefault();
+
+            const dx = e.clientX - prev.x;
+            const dy = e.clientY - prev.y;
+            prev.x = e.clientX;
+            prev.y = e.clientY;
+
+            if (appState.canvasPointers.size === 1) {
+              appState.autoRotate = false;
+              document.getElementById('chkAutoRot').checked = false;
+              appState.targetYawDeg = null;
+              appState.targetPitchDeg = null;
+              appState.yawDeg = (appState.yawDeg - dx * 0.52 + 360) % 360;
+              appState.pitchDeg = clamp(appState.pitchDeg + dy * 0.34, 6, 68);
+            } else if (appState.canvasPointers.size >= 2) {
+              const curDist = getTwoPointerDist();
+              if (curDist > 12 && appState.pinchStartDist > 12) {
+                const scale = appState.pinchStartDist / curDist;
+                appState.distance = clamp(appState.pinchStartZoom * scale, 4.0, 21.0);
+              }
+            }
+          });
+
+          const endCanvasPtr = (e) => {
+            appState.canvasPointers.delete(e.pointerId);
+            if (appState.canvasPointers.size === 2) {
+              appState.pinchStartDist = getTwoPointerDist();
+              appState.pinchStartZoom = appState.distance;
+            }
+          };
+          canvas.addEventListener('pointerup', endCanvasPtr);
+          canvas.addEventListener('pointercancel', endCanvasPtr);
+
+          canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const delta = e.deltaY > 0 ? 0.65 : -0.65;
+            appState.distance = clamp(appState.distance + delta, 4.0, 21.0);
+          }, { passive: false });
+
+          let orientTimer = null;
+          function handleViewportChange() {
+            rebuildRenderTargets();
+            if (orientTimer) clearTimeout(orientTimer);
+            orientTimer = setTimeout(() => {
+              rebuildRenderTargets();
+              syncVirtualPadVisibility();
+            }, 140);
+          }
+          window.addEventListener('orientationchange', handleViewportChange);
+          if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', handleViewportChange);
+          }
+
+          // ===================================================================
+          // 11. SIMULATION & PHYSICS UPDATE
+          // ===================================================================
+          const camTarget = new THREE.Vector3(0, 1.1, 0);
+          const _projVec = new THREE.Vector3();
+
+          function interactWithWorld(ch, dt, isPlayer) {
+            if (!ch.onGround || ch.vel.y !== 0) {
+              ch.vel.y -= 22.0 * dt;
+              ch.pos.y += ch.vel.y * dt;
+              if (ch.pos.y <= 0) {
+                ch.pos.y = 0;
+                ch.vel.y = 0;
+                ch.onGround = true;
+              }
+            }
+
+            const lim = WORLD_HALF - 0.9;
+            ch.pos.x = clamp(ch.pos.x, -lim, lim);
+            ch.pos.z = clamp(ch.pos.z, -lim, lim);
+
+            for (let i = 0; i < trees.length; i++) {
+              const tr = trees[i];
+              const dx = ch.pos.x - tr.x, dz = ch.pos.z - tr.z;
+              const d = Math.hypot(dx, dz);
+              const minD = tr.r + 0.55;
+              if (d < minD && d > 0.001) {
+                ch.pos.x = tr.x + (dx / d) * minD;
+                ch.pos.z = tr.z + (dz / d) * minD;
+              }
+            }
+
+            const dCush = Math.hypot(ch.pos.x - cushionState.pos.x, ch.pos.z - cushionState.pos.z);
+            if (dCush < cushionState.radius + 0.25 && ch.pos.y < 0.55 && ch.vel.y <= 0) {
+              ch.vel.y = 11.4;
+              ch.onGround = false;
+              cushionState.squash = 1.0;
+              if (isPlayer) {
+                setBubble('ぼよーん！！', 1.8);
+                playSfx('boing');
+              }
+            }
+
+            const bdx = ballState.pos.x - ch.pos.x;
+            const bdz = ballState.pos.z - ch.pos.z;
+            const bd = Math.hypot(bdx, bdz);
+            const kickR = ballState.radius + 0.56;
+            if (bd < kickR && Math.abs(ballState.pos.y - ch.pos.y) < 1.2 && bd > 0.001) {
+              const nx = bdx / bd, nz = bdz / bd;
+              ballState.pos.x = ch.pos.x + nx * kickR;
+              ballState.pos.z = ch.pos.z + nz * kickR;
+              const pSpd = Math.hypot(ch.vel.x, ch.vel.z);
+              const pwr = Math.max(4.8, pSpd * 1.45 + 2.4);
+              ballState.vel.x = nx * pwr + ch.vel.x * 0.35;
+              ballState.vel.z = nz * pwr + ch.vel.z * 0.35;
+              ballState.vel.y = Math.max(ballState.vel.y, 4.3 + pSpd * 0.35);
+              if (isPlayer) playSfx('kick');
+            }
+
+            const dRice = Math.hypot(ch.pos.x - riceState.pos.x, ch.pos.z - riceState.pos.z);
+            if (dRice < riceState.radius + 0.72) {
+              if (isPlayer && riceState.cooldown <= 0) {
+                riceState.cooldown = 2.6;
+                riceState.hop = 0.44;
+                ch.vel.y = Math.max(ch.vel.y, 6.4);
+                ch.onGround = false;
+                spawnRiceSparkles(riceState.pos);
+                setBubble('おいちい！🍚 / 쌀밥 최고!', 3.2);
+                playSfx('eat');
+              } else if (!isPlayer && ch.onGround && Math.random() < dt * 2.5) {
+                ch.vel.y = 5.5;
+                ch.onGround = false;
+              }
+            }
+          }
+
+          function updateSimulation(dt, timeSec) {
+            const isDraggingCanvas = appState.canvasPointers.size > 0;
+            if (appState.autoRotate && !isDraggingCanvas) {
+              appState.yawDeg = (appState.yawDeg + dt * 36) % 360;
+            } else {
+              if (appState.targetYawDeg !== null) {
+                let diff = appState.targetYawDeg - appState.yawDeg;
+                while (diff > 180) diff -= 360;
+                while (diff < -180) diff += 360;
+                if (Math.abs(diff) < 0.4) {
+                  appState.yawDeg = appState.targetYawDeg;
+                  appState.targetYawDeg = null;
+                } else {
+                  appState.yawDeg = (appState.yawDeg + diff * Math.min(1, dt * 9) + 360) % 360;
+                }
+              }
+              if (appState.targetPitchDeg !== null) {
+                const diff = appState.targetPitchDeg - appState.pitchDeg;
+                if (Math.abs(diff) < 0.4) {
+                  appState.pitchDeg = appState.targetPitchDeg;
+                  appState.targetPitchDeg = null;
+                } else {
+                  appState.pitchDeg += diff * Math.min(1, dt * 9);
+                }
+              }
+            }
+
+            syncCameraSliders(false);
+
+            const isStudio = appState.mode === 'studio';
+
+            if (!isStudio) {
+              let inX = 0, inZ = 0, moveMag = 0;
+              const k = appState.keys;
+              if (k['KeyW'] || k['ArrowUp'])    inZ -= 1;
+              if (k['KeyS'] || k['ArrowDown'])  inZ += 1;
+              if (k['KeyA'] || k['ArrowLeft'])  inX -= 1;
+              if (k['KeyD'] || k['ArrowRight']) inX += 1;
+
+              if (inX !== 0 || inZ !== 0) {
+                const len = Math.hypot(inX, inZ);
+                inX /= len;
+                inZ /= len;
+                moveMag = 1.0;
+              } else if (appState.joy.mag > 0.12) {
+                const jLen = Math.hypot(appState.joy.x, appState.joy.y) || 1;
+                inX = appState.joy.x / jLen;
+                inZ = appState.joy.y / jLen;
+                moveMag = clamp((appState.joy.mag - 0.12) / (0.78 - 0.12), 0.30, 1.0);
+              }
+
+              const moving = moveMag > 0;
+              const sprinting = moving && !!(k['ShiftLeft'] || k['ShiftRight'] || appState.dashLock || appState.joy.autoDash);
+
+              if (moving) {
+                const yawRad = appState.yawDeg * RAD;
+                const sinY = Math.sin(yawRad), cosY = Math.cos(yawRad);
+                const wx = inX * cosY + inZ * sinY;
+                const wz = -inX * sinY + inZ * cosY;
+
+                const baseSpd = player.quadMode ? 5.1 : 4.2;
+                const spd = sprinting ? baseSpd * 1.68 : baseSpd * moveMag;
+                player.vel.x = wx * spd;
+                player.vel.z = wz * spd;
+
+                const targetYaw = Math.atan2(wx, wz);
+                let dy = targetYaw - player.yaw;
+                while (dy > Math.PI) dy -= Math.PI * 2;
+                while (dy < -Math.PI) dy += Math.PI * 2;
+                player.yaw += dy * Math.min(1, dt * 14);
+              } else {
+                const damp = Math.pow(0.001, dt);
+                player.vel.x *= damp;
+                player.vel.z *= damp;
+              }
+
+              player.pos.x += player.vel.x * dt;
+              player.pos.z += player.vel.z * dt;
+              interactWithWorld(player, dt, true);
+              player.updateAnimation(dt, Math.hypot(player.vel.x, player.vel.z), sprinting, false);
+
+              const allChars = [player].concat(crowd);
+              for (let i = 0; i < crowd.length; i++) {
+                const npc = crowd[i];
+                npc.aiTimer -= dt;
+                if (npc.aiTimer <= 0) {
+                  npc.aiTimer = 1.2 + Math.random() * 2.4;
+                  const r = Math.random();
+                  if (r < 0.52) npc.aiMode = 'chaseBall';
+                  else if (r < 0.86) {
+                    npc.aiMode = 'wander';
+                    npc.aiTargetYaw = Math.random() * Math.PI * 2;
+                  } else {
+                    npc.aiMode = 'idle';
+                  }
+                  if (npc.onGround && Math.random() < 0.30) {
+                    npc.vel.y = 6.2;
+                    npc.onGround = false;
+                  }
+                }
+
+                let wantX = 0, wantZ = 0;
+                if (npc.aiMode === 'chaseBall') {
+                  const dx = ballState.pos.x - npc.pos.x;
+                  const dz = ballState.pos.z - npc.pos.z;
+                  const d = Math.hypot(dx, dz);
+                  if (d > 0.7) { wantX = dx / d; wantZ = dz / d; }
+                } else if (npc.aiMode === 'wander') {
+                  wantX = Math.sin(npc.aiTargetYaw);
+                  wantZ = Math.cos(npc.aiTargetYaw);
+                }
+
+                const npcSpd = npc.quadMode ? 3.5 : 2.8;
+                npc.vel.x += (wantX * npcSpd - npc.vel.x) * Math.min(1, dt * 5);
+                npc.vel.z += (wantZ * npcSpd - npc.vel.z) * Math.min(1, dt * 5);
+                npc.pos.x += npc.vel.x * dt;
+                npc.pos.z += npc.vel.z * dt;
+
+                const curSpd = Math.hypot(npc.vel.x, npc.vel.z);
+                if (curSpd > 0.3) {
+                  const ty = Math.atan2(npc.vel.x, npc.vel.z);
+                  let dy = ty - npc.yaw;
+                  while (dy > Math.PI) dy -= Math.PI * 2;
+                  while (dy < -Math.PI) dy += Math.PI * 2;
+                  npc.yaw += dy * Math.min(1, dt * 10);
+                }
+
+                interactWithWorld(npc, dt, false);
+                npc.updateAnimation(dt, curSpd, curSpd > 3.2, false);
+              }
+
+              for (let i = 0; i < allChars.length; i++) {
+                for (let j = i + 1; j < allChars.length; j++) {
+                  const a = allChars[i], b = allChars[j];
+                  const dx = b.pos.x - a.pos.x, dz = b.pos.z - a.pos.z;
+                  const d = Math.hypot(dx, dz);
+                  const minD = 1.05;
+                  if (d < minD && d > 0.001) {
+                    const push = (minD - d) * 0.5;
+                    const nx = dx / d, nz = dz / d;
+                    if (i > 0) { a.pos.x -= nx * push; a.pos.z -= nz * push; }
+                    b.pos.x += nx * push; b.pos.z += nz * push;
+                  }
+                }
+              }
+
+              ballState.pos.x += ballState.vel.x * dt;
+              ballState.pos.z += ballState.vel.z * dt;
+              if (ballState.pos.y > ballState.radius || ballState.vel.y !== 0) {
+                ballState.vel.y -= 20.0 * dt;
+                ballState.pos.y += ballState.vel.y * dt;
+                if (ballState.pos.y <= ballState.radius) {
+                  ballState.pos.y = ballState.radius;
+                  if (Math.abs(ballState.vel.y) > 1.2) {
+                    ballState.vel.y = -ballState.vel.y * 0.62;
+                    playSfx('kick');
+                  } else {
+                    ballState.vel.y = 0;
+                  }
+                }
+              }
+              const bDrag = ballState.pos.y <= ballState.radius + 0.05 ? Math.pow(0.24, dt) : Math.pow(0.84, dt);
+              ballState.vel.x *= bDrag;
+              ballState.vel.z *= bDrag;
+              const bLim = WORLD_HALF - ballState.radius - 0.3;
+              if (ballState.pos.x < -bLim) { ballState.pos.x = -bLim; ballState.vel.x = Math.abs(ballState.vel.x) * 0.78; }
+              if (ballState.pos.x >  bLim) { ballState.pos.x =  bLim; ballState.vel.x = -Math.abs(ballState.vel.x) * 0.78; }
+              if (ballState.pos.z < -bLim) { ballState.pos.z = -bLim; ballState.vel.z = Math.abs(ballState.vel.z) * 0.78; }
+              if (ballState.pos.z >  bLim) { ballState.pos.z =  bLim; ballState.vel.z = -Math.abs(ballState.vel.z) * 0.78; }
+
+              ballGroup.position.copy(ballState.pos);
+              ballGroup.rotation.z -= ballState.vel.x * dt * 2.2;
+              ballGroup.rotation.x += ballState.vel.z * dt * 2.2;
+              const bH = clamp(1.0 - (ballState.pos.y - ballState.radius) * 0.16, 0.45, 1.0);
+              ballShadow.position.set(ballState.pos.x, 0.025, ballState.pos.z);
+              ballShadow.scale.setScalar(bH);
+              ballShadowMat.opacity = 0.26 * bH;
+
+              cushionState.squash *= Math.pow(0.004, dt);
+              const sq = cushionState.squash;
+              cushionGroup.scale.set(1 + sq * 0.22, 1 - sq * 0.44, 1 + sq * 0.22);
+
+              if (riceState.cooldown > 0) riceState.cooldown -= dt;
+              riceState.hop *= Math.pow(0.004, dt);
+              riceGroup.position.y = riceState.hop;
+
+              for (let i = 0; i < steamPuffs.length; i++) {
+                const sp = steamPuffs[i];
+                const p = (timeSec * 0.65 + sp.phase) % 1.0;
+                sp.mesh.position.set(
+                  riceState.pos.x + Math.sin(timeSec * 2.4 + i * 2.0) * 0.15,
+                  0.82 + p * 0.85,
+                  riceState.pos.z + Math.cos(timeSec * 2.0 + i * 2.0) * 0.15
+                );
+                sp.mesh.scale.setScalar((1.0 - p) * 0.9 + 0.12);
+              }
+
+              for (let i = sparkles.length - 1; i >= 0; i--) {
+                const sk = sparkles[i];
+                sk.life -= dt;
+                if (sk.life <= 0) {
+                  worldPropsGroup.remove(sk.mesh);
+                  sparkles.splice(i, 1);
+                  continue;
+                }
+                sk.vy -= 9.5 * dt;
+                sk.mesh.position.x += sk.vx * dt;
+                sk.mesh.position.y += sk.vy * dt;
+                sk.mesh.position.z += sk.vz * dt;
+                sk.mesh.rotation.y += dt * 7;
+                sk.mesh.rotation.x += dt * 5;
+                sk.mesh.scale.setScalar(clamp(sk.life / sk.maxLife, 0.05, 1.0));
+              }
+            } else {
+              player.updateAnimation(dt, 0, false, true);
+            }
+
+            const focusX = isStudio ? 0 : player.pos.x;
+            const focusY = (isStudio ? 0 : player.pos.y) + 1.15;
+            const focusZ = isStudio ? 0 : player.pos.z;
+            camTarget.lerp(new THREE.Vector3(focusX, focusY, focusZ), Math.min(1, dt * 8));
+
+            const yawRad = appState.yawDeg * RAD;
+            const pitchRad = appState.pitchDeg * RAD;
+            const horiz = appState.distance * Math.cos(pitchRad);
+            camera.position.set(
+              camTarget.x + Math.sin(yawRad) * horiz,
+              camTarget.y + Math.sin(pitchRad) * appState.distance,
+              camTarget.z + Math.cos(yawRad) * horiz
+            );
+            camera.lookAt(camTarget);
+
+            if (appState.bubbleTimer > 0) {
+              appState.bubbleTimer -= dt;
+              if (appState.bubbleTimer <= 0) {
+                setBubble(null, 0);
+              } else {
+                player.getHeadTopWorldPos(_projVec);
+                _projVec.project(camera);
+                const rawX = (_projVec.x * 0.5 + 0.5) * viewW;
+                const rawY = (-_projVec.y * 0.5 + 0.5) * viewH - 14;
+                const halfW = (speechBubbleEl.offsetWidth || 110) * 0.5 + 12;
+                const bHeight = (speechBubbleEl.offsetHeight || 34);
+                const clampedX = clamp(rawX, halfW, Math.max(halfW, viewW - halfW));
+                const clampedY = clamp(rawY, 64 + bHeight, Math.max(64 + bHeight, viewH - 165));
+                speechBubbleEl.style.left = `${Math.round(clampedX)}px`;
+                speechBubbleEl.style.top = `${Math.round(clampedY)}px`;
+              }
+            }
+          }
+
+          // ===================================================================
+          // 12. TWO-PASS LOW-RES RENDERING + COMPOSITE 1px OUTLINE
+          // ===================================================================
+          function renderPipeline() {
+            renderer.setRenderTarget(worldRT);
+            renderer.setClearColor(0xd9f0ff, 1);
+            renderer.clear();
+            renderer.render(worldScene, camera);
+
+            renderer.setRenderTarget(charRT);
+            renderer.setClearColor(0x000000, 0);
+            renderer.clear();
+            renderer.render(charScene, camera);
+
+            renderer.setRenderTarget(null);
+            renderer.clear();
+            renderer.render(postScene, postCam);
+          }
+
+          let lastNow = 0;
+          function animate(now) {
+            if (!lastNow) lastNow = now;
+            const dt = Math.min(0.05, (now - lastNow) / 1000);
+            lastNow = now;
+            updateSimulation(dt, now * 0.001);
+            renderPipeline();
+            requestAnimationFrame(animate);
+          }
+
+          syncVirtualPadVisibility();
+          syncCameraSliders(true);
+          updateHudTag();
+          requestAnimationFrame(animate);
+
+        } catch (err) {
+          const banner = document.getElementById('errorBanner');
+          const text = document.getElementById('errorText');
+          if (banner && text) {
+            text.textContent = err && err.message ? err.message : String(err);
+            banner.classList.remove('hidden');
+          }
+        }
+      }
+
+      if (document.readyState === 'complete') {
+        initApp();
+      } else {
+        window.addEventListener('load', initApp);
+      }
+    })();
+  </script>
+</body>
+</html>
