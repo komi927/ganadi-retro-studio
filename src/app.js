@@ -3,13 +3,13 @@ import { MAX_CAMERA_DISTANCE, RAD, WORLD_HALF, clamp } from './math.js?v=2';
 import { playSfx, toggleAudio } from './audio.js';
 import { CHARACTERS, FLOOR_POSES } from './characters/design.js';
 import { buildSharedAssets, buildGonyaniAssets } from './characters/assets.js';
-import { StudioCharacter } from './characters/character.js?v=7';
+import { StudioCharacter } from './characters/character.js?v=8';
 import { globalRenderUniforms } from './graphics/materials.js';
 import { createRenderPipeline } from './graphics/renderer.js';
 import { createWorld } from './world/scene.js?v=7';
 import { BENCH_REACH, createBenchClimb } from './world/bench-climb.js?v=2';
 import { createCheekNuzzle } from './world/cheek-nuzzle.js?v=3';
-import { createIdleExchange, createSnackTime } from './world/plaza-moments.js?v=7';
+import { createIdleExchange, createSnackTime } from './world/plaza-moments.js?v=8';
 import { createWorldInteractions, movePlayer, updateCrowd } from './world/physics.js';
 import { createTransparentPng } from './export/png.js';
 import { buildCharacterGlb } from './export/glb.js';
@@ -553,16 +553,13 @@ function initApp() {
 
     visitPlazaSpot('snack');
     if (!companion) createCompanion(plazaState.focus.companion);
+    if (companionBeat) companion.setEmote('normal');
     companionBeat = null;
     player.yaw = -.36;
     companion.yaw = .36;
-    companion.setEmote('sit');
-    player.setEmote('sit');
     setBubble(null);
     setPlazaReply(null);
     snackTime.start(player, companion);
-    updateEmoteUI();
-    updateStatus();
   }
 
   function handleSnackBite(role, actor) {
@@ -578,7 +575,6 @@ function initApp() {
   function cancelSnackTime() {
     if (!snackTime.active) return;
     snackTime.stop();
-    if (companion?.activeEmote === 'sit') companion.setEmote('normal');
     setBubble(null);
     setPlazaReply(null);
   }
@@ -1131,7 +1127,6 @@ function initApp() {
       idleExchange.update(player, companion, dt, settled);
       if (snackTime.active) {
         snackTime.update(dt, handleSnackBite);
-        if (!snackTime.active && companion?.activeEmote === 'sit') companion.setEmote('normal');
       }
       if (player.updateAnimation(dt, speed, !climbing && sprinting, false, benchClimb.isSeated(player))) updateStatus();
       updatePlaza(dt, timeSec);

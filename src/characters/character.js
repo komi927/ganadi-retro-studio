@@ -409,6 +409,7 @@ export class StudioCharacter {
     else if (paired) pose = 'cheek';
     else if (moving) pose = sprinting ? 'run' : 'walk';
     else if (!this.onGround) pose = 'jump';
+    else if (this.snackGesture) pose = 'sit';
     const finishedBow = pose === 'bow' && this.emoteAge >= .86;
     if (finishedBow) pose = 'idle';
     const useBipedPose = BIPED_POSES.has(pose);
@@ -615,7 +616,7 @@ export class StudioCharacter {
           headPitch += .25 * look + .12 * reach + .045 * chew;
           if (side < 0) armLP -= .83 * reach;
           else armRP -= .83 * reach;
-          if (this.isGonyani) this.setFace('gonyani-normal');
+          this.setFace(this.emotes[0].face);
         }
       }
       tailWag = Math.sin(t * 1.6) * 0.34;

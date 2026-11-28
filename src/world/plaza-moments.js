@@ -53,14 +53,22 @@ export function createSnackTime(plaza) {
       { role: 'resident', pickup: 2.67, bite: 3.35 },
     ];
     for (const diner of diners) {
-      diner.food = plaza.snackFood[diner.role === 'resident' ? 'resident' : diner.actor === player ? 'right' : 'left'];
+      const { actor, side } = diner;
+      diner.food = plaza.snackFood[!actor ? 'resident' : actor === player ? 'right' : 'left'];
+      if (actor) {
+        actor.snackGesture = { side, look: 0, reach: 0, chew: 0 };
+        actor.setProp(null);
+      }
     }
   }
 
   function stop() {
     if (!diners) return;
     for (const { actor, food, bite } of diners) {
-      if (actor) actor.snackGesture = null;
+      if (actor) {
+        actor.snackGesture = null;
+        actor.setProp(actor.emotes.find(emote => emote.id === actor.activeEmote)?.prop);
+      }
       food.position.set(0, 0, 0);
       food.scale.setScalar(1);
       food.visible = time < bite;
