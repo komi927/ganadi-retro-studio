@@ -91,18 +91,15 @@ export function createBenchPhoto(plaza) {
       const yaw = actor.yaw;
       const targetYaw = Math.atan2(x - actor.pos.x, z + 2.4 - actor.pos.z);
       const turn = euclideanModulo(targetYaw - yaw + Math.PI, 2 * Math.PI) - Math.PI;
-      const prop = actor.emotes.find(emote => emote.id === actor.activeEmote)?.prop;
-      actor.setProp(null);
       actor.photoLook = 0;
-      return { actor, yaw, turn, prop };
+      return { actor, yaw, turn };
     });
   }
 
   function stop() {
-    for (const { actor, yaw, prop } of actors) {
+    for (const { actor, yaw } of actors) {
       actor.yaw = yaw;
       actor.photoLook = null;
-      actor.setProp(prop);
     }
     actors = [];
     plaza.poseResidentPhoto(0);

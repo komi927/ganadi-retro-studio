@@ -3,14 +3,14 @@ import { MAX_CAMERA_DISTANCE, RAD, WORLD_HALF, clamp } from './math.js?v=2';
 import { playSfx, toggleAudio } from './audio.js';
 import { CHARACTERS, FLOOR_POSES } from './characters/design.js';
 import { buildSharedAssets, buildGonyaniAssets } from './characters/assets.js';
-import { StudioCharacter } from './characters/character.js?v=10';
+import { StudioCharacter } from './characters/character.js?v=12';
 import { globalRenderUniforms } from './graphics/materials.js';
 import { createRenderPipeline } from './graphics/renderer.js?v=10';
 import { createWorld } from './world/scene.js?v=10';
 import { BENCH_REACH, createBenchClimb } from './world/bench-climb.js?v=2';
 import { createCheekNuzzle } from './world/cheek-nuzzle.js?v=3';
 import { createIdleExchange, createSnackTime } from './world/plaza-moments.js?v=8';
-import { createBenchPhoto, createSharedNap, createWaryStep } from './world/plaza-play.js?v=10';
+import { createBenchPhoto, createSharedNap, createWaryStep } from './world/plaza-play.js?v=12';
 import { createFootprints } from './world/footprints.js?v=10';
 import { createWorldInteractions, movePlayer, updateCrowd } from './world/physics.js';
 import { createTransparentPng } from './export/png.js';
@@ -49,7 +49,6 @@ function initApp() {
   let companion = null;
   let companionBeat = null;
   let plazaReply = null;
-  let residentPhoto = null;
   const plazaState = { snack: 0, attention: 0, focus: null };
   const snackActions = ['🍓 いちごをのせる', '🍰 おやつを分ける', '↺ もう一度つくる'];
   const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
@@ -85,11 +84,11 @@ function initApp() {
   const speechBubbleEl = document.getElementById('speechBubble');
   const plazaBubbleEl = document.getElementById('plazaBubble');
   const companionButton = document.getElementById('btnCompanion');
-  const benchPhotoButton = document.getElementById('btnBenchPhoto');
   const eveningButton = document.getElementById('btnEvening');
   const scenePhotoButton = document.getElementById('btnScenePhoto');
   const photoPreview = document.getElementById('benchPhotoPreview');
   const photoImage = document.getElementById('benchPhotoImage');
+  const canPreviewPhoto = Boolean(photoPreview?.showModal && photoImage);
   // 旧版の HTML がキャッシュに残っている間も起動できるようにする。
   const plazaActionButton = document.getElementById('btnPlazaAction') || document.getElementById('btnSnackAction');
   const formsButton = document.getElementById('btnForms');
@@ -259,10 +258,6 @@ function initApp() {
   }
 
   function takeScenePhoto() {
-    if (residentPhoto) {
-      saveResidentPhoto();
-      return;
-    }
     if (graphics.isContextLost()) {
       showToast('写真を保存できませんでした');
       return;
@@ -272,40 +267,26 @@ function initApp() {
   }
 
   function saveResidentPhoto() {
-    if (!residentPhoto) return;
-    savePhoto('ganadi-bench-photo_', residentPhoto);
-    if (photoPreview?.open) photoPreview.close();
-    residentPhoto = null;
-    scenePhotoButton.textContent = '📷 写真';
-    scenePhotoButton.title = '広場やスタジオを背景ごとPNGで保存';
-  }
-
-  function showResidentPhoto() {
-    if (!residentPhoto || !photoPreview?.showModal) return false;
-    releaseHeldControls();
-    photoImage.src = residentPhoto;
-    photoPreview.showModal();
-    return true;
+    if (!photoPreview?.open) return;
+    savePhoto('ganadi-bench-photo_', photoImage.src);
+    photoPreview.close();
   }
 
   function captureBenchPhoto() {
-    if (graphics.isContextLost()) return;
+    if (graphics.isContextLost()) {
+      showToast('写真を表示できませんでした');
+      return;
+    }
     const wasVisible = plaza.resident.visible;
     plaza.resident.visible = false;
     try {
       renderPipeline(benchPhoto.view(camera.aspect));
-      residentPhoto = canvas.toDataURL('image/png');
+      photoImage.src = canvas.toDataURL('image/png');
     } finally {
       plaza.resident.visible = wasVisible;
     }
-    if (showResidentPhoto()) {
-      scenePhotoButton.textContent = '📷 見る';
-      scenePhotoButton.title = 'ゴンニョンイが撮った写真を見る';
-    } else {
-      scenePhotoButton.textContent = '📷 保存';
-      scenePhotoButton.title = 'ゴンニョンイが撮った写真をPNGで保存';
-      showToast('📸 撮れました。「保存」でダウンロード');
-    }
+    releaseHeldControls();
+    photoPreview.showModal();
   }
 
   function setQuadMode(enabled, notify = true) {
@@ -551,8 +532,8 @@ function initApp() {
   }
 
   function startBenchPhoto() {
-    if (appState.mode !== 'world' || !companion || benchPhoto.active) return;
     visitPlazaSpot('bench');
+    if (!companion) createCompanion(plazaState.focus.companion);
     if (companionBeat) companion.setEmote('normal');
     companionBeat = null;
     setBubble(null);
@@ -609,7 +590,6 @@ function initApp() {
   }
 
   function syncPlazaAction() {
-    benchPhotoButton?.classList.toggle('hidden', !companion || benchPhoto.active);
     viewportWrap.classList.toggle('bench-perch', benchClimb.active);
     const action = getPlazaAction();
     const labels = {
@@ -791,6 +771,9 @@ function initApp() {
     setPlazaReply(null);
     setFormMenu(false);
     const isWorld = mode === 'world';
+    const residentTakesPhoto = isWorld && canPreviewPhoto;
+    scenePhotoButton.textContent = residentTakesPhoto ? '📸 撮影' : '📷 写真';
+    scenePhotoButton.title = residentTakesPhoto ? 'ゴンニョンイに撮ってもらう' : '今の画面を背景ごとPNGで保存';
     viewportWrap.classList.toggle('world-mode', isWorld);
     world.setMode(mode, appState.evening);
     graphics.setEvening(isWorld && appState.evening);
@@ -864,7 +847,6 @@ function initApp() {
     syncPlazaAction();
   });
   document.getElementById('btnVisitBench').addEventListener('click', () => visitPlazaSpot('bench'));
-  benchPhotoButton?.addEventListener('click', startBenchPhoto);
   document.getElementById('btnVisitSnack').addEventListener('click', () => visitPlazaSpot('snack'));
   eveningButton?.addEventListener('click', () => {
     appState.evening = !appState.evening;
@@ -879,11 +861,12 @@ function initApp() {
   plazaActionButton.addEventListener('click', usePlazaAction);
   document.getElementById('btnPet').addEventListener('click', () => petActor(player));
   scenePhotoButton.addEventListener('click', () => {
-    if (!showResidentPhoto()) takeScenePhoto();
+    if (appState.mode === 'world' && canPreviewPhoto) startBenchPhoto();
+    else takeScenePhoto();
   });
   document.getElementById('btnSaveBenchPhoto')?.addEventListener('click', saveResidentPhoto);
   photoPreview?.addEventListener('close', () => {
-    if (!photoPreview.open) photoImage.removeAttribute('src');
+    if (!photoPreview.open) photoImage?.removeAttribute('src');
   });
   document.getElementById('btnStyleBiped').addEventListener('click', () => setQuadMode(false));
   document.getElementById('btnStyleQuad').addEventListener('click', () => setQuadMode(true));

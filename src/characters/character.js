@@ -3,7 +3,7 @@ import { S, RAD, clamp } from '../math.js';
 import { HEAD_LOCAL_CY, HEAD_PIVOT_Y, HEAD_RY, FLOOR_POSES } from './design.js';
 import { getFaceMaterial } from './faces.js?v=7';
 
-const BIPED_POSES = new Set(['sit', 'bow', 'perch', 'cheek', 'photo']);
+const BIPED_POSES = new Set(['sit', 'bow', 'perch', 'cheek']);
 
 export class StudioCharacter {
   constructor(character, assets, worldScene, charScene, isPlayer = false, initialStyle = 'lowpoly') {
@@ -411,13 +411,14 @@ export class StudioCharacter {
     let pose = em.pose;
     if (perched) pose = 'perch';
     else if (paired) pose = 'cheek';
-    else if (this.photoLook !== null) pose = 'photo';
     else if (moving) pose = sprinting ? 'run' : 'walk';
     else if (!this.onGround) pose = 'jump';
     else if (this.snackGesture) pose = 'sit';
     else if (this.sharedNap) pose = this.isGonyani ? 'loaf' : 'sleep';
     else if (this.waryStep) pose = 'wary';
-    const finishedBow = pose === 'bow' && this.emoteAge >= .86;
+    // For a photo, reach the deepest part of the bow when the actor finishes turning.
+    const bowProgress = this.photoLook === null ? this.emoteAge / .86 : this.photoLook * .5;
+    const finishedBow = pose === 'bow' && bowProgress >= 1;
     if (finishedBow) pose = 'idle';
     const useBipedPose = BIPED_POSES.has(pose);
     const qTarget = Number(this.quadMode && !useBipedPose);
@@ -480,10 +481,6 @@ export class StudioCharacter {
     } else if (pose === 'stare') {
       headYaw = .14;
       tailWag = Math.sin(t * .7) * .08;
-    } else if (pose === 'photo') {
-      headPitch = -.27 * this.photoLook;
-      headRoll = this.isGonyani ? .045 : -.06;
-      this.setFace(this.emotes[0].face);
     } else if (pose === 'cheek') {
       const { side, amount } = this.cheekLean;
       const lean = side * amount;
@@ -639,7 +636,7 @@ export class StudioCharacter {
       }
       tailWag = Math.sin(t * 1.6) * 0.34;
     } else if (pose === 'bow') {
-      const dip = Math.sin(Math.PI * clamp(this.emoteAge / .86, 0, 1));
+      const dip = Math.sin(Math.PI * clamp(bowProgress, 0, 1));
       bodyY = -.018 * dip;
       bodyPitch = .10 * dip;
       headPitch = .31 * dip;
@@ -713,6 +710,9 @@ export class StudioCharacter {
       this.applyFloorPose(pose, t);
     } else if (mochi) {
       this.headPivot.position.set(-.035, .727, .043);
+    }
+    if (this.photoLook !== null && !floorPose && pose !== 'bow') {
+      this.headPivot.rotation.x -= .27 * this.photoLook;
     }
 
     this.angelWingsGroup.position.set(
