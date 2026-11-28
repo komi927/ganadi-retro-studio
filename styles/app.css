@@ -46,6 +46,10 @@ body {
   height: 100%;
   touch-action: none;
 }
+#webglCanvas.dot-canvas {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
 .mono {
   font-family: 'JetBrains Mono', monospace;
 }

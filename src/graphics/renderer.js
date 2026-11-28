@@ -23,7 +23,7 @@ export function createRenderPipeline(viewportWrap, canvas) {
   const charScene = new THREE.Scene();
 
   let retroSize = 320;
-  let dotSize = 160;
+  let dotScale = 3;
   let retro = false;
   let dotMode = false;
   let viewW, viewH, targetW, targetH;
@@ -105,16 +105,27 @@ export function createRenderPipeline(viewportWrap, canvas) {
       window.devicePixelRatio || 1, 2, Math.sqrt(2400000 / (viewW * viewH))
     ));
     if (renderer.getPixelRatio() !== displayRatio) renderer.setPixelRatio(displayRatio);
-    renderer.setSize(viewW, viewH, false);
+    // Dot style follows the original 3D Dot Playground: shrink the canvas
+    // buffer itself to 1/dotScale and let CSS image-rendering: pixelated
+    // upscale it into crisp dots (the canvas element carries .dot-canvas).
+    const bufferW = dotMode ? Math.max(1, Math.round(viewW / dotScale)) : viewW;
+    const bufferH = dotMode ? Math.max(1, Math.round(viewH / dotScale)) : viewH;
+    renderer.setSize(bufferW, bufferH, false);
     camera.aspect = viewW / viewH;
     camera.updateProjectionMatrix();
 
-    const renderRatio = lowRes ? Math.min(1, (dotMode ? dotSize : retroSize) / Math.min(viewW, viewH)) : displayRatio;
-    const width = Math.max(1, Math.round(viewW * renderRatio));
-    const height = Math.max(1, Math.round(viewH * renderRatio));
+    let width, height;
+    if (dotMode) {
+      width = bufferW;
+      height = bufferH;
+    } else {
+      const renderRatio = retro ? Math.min(1, retroSize / Math.min(viewW, viewH)) : displayRatio;
+      width = Math.max(1, Math.round(viewW * renderRatio));
+      height = Math.max(1, Math.round(viewH * renderRatio));
+    }
     // Vertex snap is a PS1-only quirk; dot style keeps vertices steady.
     globalRenderUniforms.uSnapGrid.value.set(retro ? width / 2 : 0, retro ? height / 2 : 0);
-    const targetMode = retro ? 'ps1' : (dotMode ? 'dot' : 'normal');
+    const targetMode = retro ? 'ps1' : (dotMode ? `dot${dotScale}` : 'normal');
     if (targetW === width && targetH === height && targetRetro === targetMode) return;
     targetW = width;
     targetH = height;
@@ -187,11 +198,19 @@ export function createRenderPipeline(viewportWrap, canvas) {
       rebuildRenderTargets();
     },
     setPixelSize(size) {
-      if (dotMode) dotSize = size; else retroSize = size;
+      retroSize = size;
       rebuildRenderTargets();
     },
     getPixelSize() {
-      return dotMode ? dotSize : retroSize;
+      return retroSize;
+    },
+    setDotScale(scale) {
+      if (dotScale === scale) return;
+      dotScale = scale;
+      rebuildRenderTargets();
+    },
+    getDotScale() {
+      return dotScale;
     },
     setOutline(enabled) {
       compositeMat.uniforms.uOutlineOn.value = enabled ? 1 : 0;

@@ -252,15 +252,18 @@
       <div class="bg-slate-100/90 border border-slate-200 rounded-2xl p-2.5 space-y-2.5">
         <div id="retroResolution" hidden>
           <div class="flex items-center justify-between mb-1.5">
-            <span class="text-[11px] font-extrabold text-slate-600">低解像度の描画解像度（短辺）</span>
+            <span id="retroResLabel" class="text-[11px] font-extrabold text-slate-600">PS1風の描画解像度（短辺）</span>
             <span id="pixelSizeLabel" class="mono text-[10px] font-bold text-pink-600">320 px</span>
           </div>
-          <div class="grid grid-cols-5 gap-1.5">
+          <div id="retroPxRow" class="grid grid-cols-3 gap-1.5">
             <button data-px="512" class="px-btn pixel-btn bg-white rounded-xl py-1 text-xs font-extrabold mono">512</button>
             <button data-px="320" class="px-btn pixel-btn active rounded-xl py-1 text-xs font-extrabold mono">320</button>
             <button data-px="256" class="px-btn pixel-btn bg-white rounded-xl py-1 text-xs font-extrabold mono">256</button>
-            <button data-px="192" class="px-btn pixel-btn bg-white rounded-xl py-1 text-xs font-extrabold mono">192</button>
-            <button data-px="128" class="px-btn pixel-btn bg-white rounded-xl py-1 text-xs font-extrabold mono">128</button>
+          </div>
+          <div id="dotScaleRow" class="grid grid-cols-3 gap-1.5" hidden>
+            <button data-scale="2" class="scale-btn pixel-btn bg-white rounded-xl py-1 text-xs font-extrabold mono">2x</button>
+            <button data-scale="3" class="scale-btn pixel-btn active rounded-xl py-1 text-xs font-extrabold mono">3x</button>
+            <button data-scale="4" class="scale-btn pixel-btn bg-white rounded-xl py-1 text-xs font-extrabold mono">4x</button>
           </div>
         </div>
 

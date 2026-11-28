@@ -172,14 +172,31 @@ function initApp() {
     graphics.setRetro(isPS1);
     graphics.setDot(isDot);
     document.getElementById('retroResolution').hidden = !(isPS1 || isDot);
-    // Resolution choices are per-mode (PS1 and dot remember separate sizes).
-    const activePx = graphics.getPixelSize();
-    document.getElementById('pixelSizeLabel').textContent = activePx + ' px';
-    document.querySelectorAll('.px-btn').forEach((b) => {
-      const act = Number(b.dataset.px) === activePx;
-      b.classList.toggle('active', act);
-      b.classList.toggle('bg-white', !act);
-    });
+    document.getElementById('retroPxRow').hidden = !isPS1;
+    document.getElementById('dotScaleRow').hidden = !isDot;
+    canvas.classList.toggle('dot-canvas', isDot);
+    // Resolution UI follows the active mode (PS1: short-side px, dot: pixel scale).
+    const resLabel = document.getElementById('retroResLabel');
+    const sizeLabel = document.getElementById('pixelSizeLabel');
+    if (isDot) {
+      resLabel.textContent = '🧱 ドット解像度 (Pixel Scale)';
+      const sc = graphics.getDotScale();
+      sizeLabel.textContent = sc + 'x';
+      document.querySelectorAll('.scale-btn').forEach((b) => {
+        const act = Number(b.dataset.scale) === sc;
+        b.classList.toggle('active', act);
+        b.classList.toggle('bg-white', !act);
+      });
+    } else {
+      resLabel.textContent = 'PS1風の描画解像度（短辺）';
+      const px = graphics.getPixelSize();
+      sizeLabel.textContent = px + ' px';
+      document.querySelectorAll('.px-btn').forEach((b) => {
+        const act = Number(b.dataset.px) === px;
+        b.classList.toggle('active', act);
+        b.classList.toggle('bg-white', !act);
+      });
+    }
 
     // Update geometry across player & all crowd Ganadis
     player.setStyle(styleMode);
@@ -933,6 +950,21 @@ function initApp() {
       graphics.setPixelSize(pixelSize);
       document.getElementById('pixelSizeLabel').textContent = pixelSize + ' px';
       document.querySelectorAll('.px-btn').forEach((b) => {
+        const act = b === btn;
+        b.classList.toggle('active', act);
+        b.classList.toggle('bg-white', !act);
+      });
+      updateStatus();
+    });
+  });
+
+  // ドット解像度 (Pixel Scale): 元のドット版と同じ 2x / 3x / 4x 切り替え。
+  document.querySelectorAll('.scale-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const scale = Number(btn.dataset.scale);
+      graphics.setDotScale(scale);
+      document.getElementById('pixelSizeLabel').textContent = scale + 'x';
+      document.querySelectorAll('.scale-btn').forEach((b) => {
         const act = b === btn;
         b.classList.toggle('active', act);
         b.classList.toggle('bg-white', !act);
